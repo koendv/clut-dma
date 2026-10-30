@@ -1,0 +1,6 @@
+# sby work directories and status databases
+*_prove*/
+*_cover*/
+apb/
+clut_dma/
+fbmem/

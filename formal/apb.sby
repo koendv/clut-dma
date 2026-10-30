@@ -1,0 +1,39 @@
+# APB3 properties (fapb3_slave.v) of clut_dma, with and without cache, and spi_lcd.
+# sby -f apb.sby: all tasks. clut_dma: pdr. spi_lcd: k-induction, with the
+# invariants in its FORMAL block, for all DIV values
+
+[tasks]
+dma_prove       dma prove pdr default
+dma0_prove      dma0 prove pdr default
+dma_cover       dma cover default
+spi_prove       spi prove ind default
+spi_cover       spi div1 cover default
+
+[options]
+prove: mode prove
+cover: mode cover
+cover: depth 40
+ind: depth 4
+
+[engines]
+pdr: abc pdr
+ind: smtbmc yices
+cover: smtbmc yices
+
+[script]
+read -formal fapb3_slave.v apb_wrap.v
+# without FORMAL: only the APB properties, not the FORMAL block of clut_dma.v
+dma: read -sv clut_dma.v
+dma0: read -sv clut_dma.v
+spi: read -formal spi_lcd.v
+dma: prep -top apb_clut_dma
+dma0: chparam -set CACHE 0 apb_clut_dma
+dma0: prep -top apb_clut_dma
+div1: chparam -set DIVMAX 1 apb_spi_lcd
+spi: prep -top apb_spi_lcd
+
+[files]
+fapb3_slave.v
+apb_wrap.v
+../rtl/clut_dma.v
+../fpga/rtl/spi_lcd.v

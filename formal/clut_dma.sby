@@ -1,0 +1,27 @@
+# clut_dma: the properties in the FORMAL block of rtl/clut_dma.v,
+# with and without cache.
+# sby -f clut_dma.sby
+
+[tasks]
+prove         cache1 prove
+prove0        cache0 prove
+cover         cache1 cover
+cover0        cache0 cover
+
+[options]
+prove: mode prove
+cover: mode cover
+prove: depth 20
+cover: depth 120
+
+[engines]
+prove: smtbmc yices
+cover: smtbmc yices
+
+[script]
+read -formal clut_dma.v
+cache0: chparam -set CACHE 0 clut_dma
+prep -top clut_dma
+
+[files]
+../rtl/clut_dma.v

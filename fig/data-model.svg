@@ -1,0 +1,158 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="487" height="290" viewBox="0 0 487 290" font-family="DejaVu Sans, sans-serif" font-size="9" fill="#222">
+<title>Data model: the color of pixel (x, y)</title>
+<defs><marker id="a" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#222"/></marker></defs>
+<rect width="487" height="290" fill="#fff"/>
+<text x="4" y="12" font-weight="bold">display, TILE_COLS = 4</text>
+<rect x="36" y="52" width="32" height="32" fill="#0000ff" stroke="none" stroke-width="1"/>
+<path d="M48,56h4v4h-4zM52,56h4v4h-4zM44,60h4v4h-4zM48,60h4v4h-4zM52,60h4v4h-4zM56,60h4v4h-4zM40,64h4v4h-4zM44,64h4v4h-4zM48,64h4v4h-4zM52,64h4v4h-4zM56,64h4v4h-4zM60,64h4v4h-4zM40,68h4v4h-4zM44,68h4v4h-4zM48,68h4v4h-4zM52,68h4v4h-4zM56,68h4v4h-4zM60,68h4v4h-4zM44,72h4v4h-4zM48,72h4v4h-4zM52,72h4v4h-4zM56,72h4v4h-4zM48,76h4v4h-4zM52,76h4v4h-4z" fill="#ffff00"/>
+<rect x="36" y="52" width="32" height="32" fill="none" stroke="#222" stroke-width="0.8"/>
+<rect x="4" y="20" width="32" height="32" fill="none" stroke="#999" stroke-width="0.8"/>
+<text x="6.5" y="29" font-size="8" fill="#888">0</text>
+<rect x="36" y="20" width="32" height="32" fill="none" stroke="#999" stroke-width="0.8"/>
+<text x="38.5" y="29" font-size="8" fill="#888">1</text>
+<rect x="68" y="20" width="32" height="32" fill="none" stroke="#999" stroke-width="0.8"/>
+<text x="70.5" y="29" font-size="8" fill="#888">2</text>
+<rect x="100" y="20" width="32" height="32" fill="none" stroke="#999" stroke-width="0.8"/>
+<text x="102.5" y="29" font-size="8" fill="#888">3</text>
+<rect x="4" y="52" width="32" height="32" fill="none" stroke="#999" stroke-width="0.8"/>
+<text x="6.5" y="61" font-size="8" fill="#888">4</text>
+<rect x="36" y="52" width="32" height="32" fill="none" stroke="#999" stroke-width="0.8"/>
+<text x="38.5" y="61" font-size="8" fill="#fff">5</text>
+<rect x="68" y="52" width="32" height="32" fill="none" stroke="#999" stroke-width="0.8"/>
+<text x="70.5" y="61" font-size="8" fill="#888">6</text>
+<rect x="100" y="52" width="32" height="32" fill="none" stroke="#999" stroke-width="0.8"/>
+<text x="102.5" y="61" font-size="8" fill="#888">7</text>
+<rect x="4" y="84" width="32" height="32" fill="none" stroke="#999" stroke-width="0.8"/>
+<text x="6.5" y="93" font-size="8" fill="#888">8</text>
+<rect x="36" y="84" width="32" height="32" fill="none" stroke="#999" stroke-width="0.8"/>
+<text x="38.5" y="93" font-size="8" fill="#888">9</text>
+<rect x="68" y="84" width="32" height="32" fill="none" stroke="#999" stroke-width="0.8"/>
+<text x="70.5" y="93" font-size="8" fill="#888">10</text>
+<rect x="100" y="84" width="32" height="32" fill="none" stroke="#999" stroke-width="0.8"/>
+<text x="102.5" y="93" font-size="8" fill="#888">11</text>
+<rect x="48" y="60" width="4" height="4" fill="none" stroke="#d00000" stroke-width="1.4"/>
+<text x="4" y="130" fill="#d00000">pixel (x, y) = (11, 10)</text>
+<text x="4" y="142">tile t = 5</text>
+<text x="4" y="166" font-weight="bold">FB: byte 41</text>
+<text x="4" y="178" font-size="8">y·TILE_COLS + x/8</text>
+<rect x="4" y="186" width="36" height="20" fill="none" stroke="#222" stroke-width="0.8"/>
+<text x="22" y="199.5" font-size="8" text-anchor="middle">byte 40</text>
+<rect x="40" y="186" width="36" height="20" fill="#ffd8a8" stroke="#c05a00" stroke-width="1.4"/>
+<text x="58" y="199.5" font-size="8" text-anchor="middle">byte 41</text>
+<rect x="76" y="186" width="36" height="20" fill="none" stroke="#222" stroke-width="0.8"/>
+<text x="94" y="199.5" font-size="8" text-anchor="middle">byte 42</text>
+<rect x="112" y="186" width="36" height="20" fill="none" stroke="#222" stroke-width="0.8"/>
+<text x="130" y="199.5" font-size="8" text-anchor="middle">byte 43</text>
+<polyline points="40,206 4,218" fill="none" stroke="#999" stroke-width="0.6"/>
+<polyline points="76,206 148,218" fill="none" stroke="#999" stroke-width="0.6"/>
+<rect x="4" y="228" width="18" height="20" fill="none" stroke="#222" stroke-width="0.8"/>
+<text x="13" y="242" text-anchor="middle" font-family="DejaVu Sans Mono, monospace">0</text>
+<text x="13" y="226" font-size="8" text-anchor="middle" fill="#888">7</text>
+<rect x="22" y="228" width="18" height="20" fill="none" stroke="#222" stroke-width="0.8"/>
+<text x="31" y="242" text-anchor="middle" font-family="DejaVu Sans Mono, monospace">0</text>
+<text x="31" y="226" font-size="8" text-anchor="middle" fill="#888">6</text>
+<rect x="40" y="228" width="18" height="20" fill="none" stroke="#222" stroke-width="0.8"/>
+<text x="49" y="242" text-anchor="middle" font-family="DejaVu Sans Mono, monospace">1</text>
+<text x="49" y="226" font-size="8" text-anchor="middle" fill="#888">5</text>
+<rect x="58" y="228" width="18" height="20" fill="#ffd8a8" stroke="#c05a00" stroke-width="1.4"/>
+<text x="67" y="242" text-anchor="middle" font-family="DejaVu Sans Mono, monospace">1</text>
+<text x="67" y="226" font-size="8" text-anchor="middle" fill="#888">4</text>
+<rect x="76" y="228" width="18" height="20" fill="none" stroke="#222" stroke-width="0.8"/>
+<text x="85" y="242" text-anchor="middle" font-family="DejaVu Sans Mono, monospace">1</text>
+<text x="85" y="226" font-size="8" text-anchor="middle" fill="#888">3</text>
+<rect x="94" y="228" width="18" height="20" fill="none" stroke="#222" stroke-width="0.8"/>
+<text x="103" y="242" text-anchor="middle" font-family="DejaVu Sans Mono, monospace">1</text>
+<text x="103" y="226" font-size="8" text-anchor="middle" fill="#888">2</text>
+<rect x="112" y="228" width="18" height="20" fill="none" stroke="#222" stroke-width="0.8"/>
+<text x="121" y="242" text-anchor="middle" font-family="DejaVu Sans Mono, monospace">0</text>
+<text x="121" y="226" font-size="8" text-anchor="middle" fill="#888">1</text>
+<rect x="130" y="228" width="18" height="20" fill="none" stroke="#222" stroke-width="0.8"/>
+<text x="139" y="242" text-anchor="middle" font-family="DejaVu Sans Mono, monospace">0</text>
+<text x="139" y="226" font-size="8" text-anchor="middle" fill="#888">0</text>
+<text x="72" y="262" font-size="8">bit 7 − x%8 = 4</text>
+<text x="175" y="12" font-weight="bold">MAP: nibble t = (y/8)·TILE_COLS + x/8 = 5</text>
+<rect x="175" y="32" width="22" height="20" fill="none" stroke="#222" stroke-width="0.8"/>
+<text x="186" y="46" text-anchor="middle" font-family="DejaVu Sans Mono, monospace">0</text>
+<text x="186" y="28" font-size="8" text-anchor="middle" fill="#888">0</text>
+<rect x="197" y="32" width="22" height="20" fill="none" stroke="#222" stroke-width="0.8"/>
+<text x="208" y="46" text-anchor="middle" font-family="DejaVu Sans Mono, monospace">1</text>
+<text x="208" y="28" font-size="8" text-anchor="middle" fill="#888">1</text>
+<rect x="219" y="32" width="22" height="20" fill="none" stroke="#222" stroke-width="0.8"/>
+<text x="230" y="46" text-anchor="middle" font-family="DejaVu Sans Mono, monospace">0</text>
+<text x="230" y="28" font-size="8" text-anchor="middle" fill="#888">2</text>
+<rect x="241" y="32" width="22" height="20" fill="none" stroke="#222" stroke-width="0.8"/>
+<text x="252" y="46" text-anchor="middle" font-family="DejaVu Sans Mono, monospace">2</text>
+<text x="252" y="28" font-size="8" text-anchor="middle" fill="#888">3</text>
+<rect x="263" y="32" width="22" height="20" fill="none" stroke="#222" stroke-width="0.8"/>
+<text x="274" y="46" text-anchor="middle" font-family="DejaVu Sans Mono, monospace">1</text>
+<text x="274" y="28" font-size="8" text-anchor="middle" fill="#888">4</text>
+<rect x="285" y="32" width="22" height="20" fill="#ffd8a8" stroke="#c05a00" stroke-width="1.4"/>
+<text x="296" y="46" text-anchor="middle" font-family="DejaVu Sans Mono, monospace">3</text>
+<text x="296" y="28" font-size="8" text-anchor="middle" fill="#888">5</text>
+<rect x="307" y="32" width="22" height="20" fill="none" stroke="#222" stroke-width="0.8"/>
+<text x="318" y="46" text-anchor="middle" font-family="DejaVu Sans Mono, monospace">3</text>
+<text x="318" y="28" font-size="8" text-anchor="middle" fill="#888">6</text>
+<rect x="329" y="32" width="22" height="20" fill="none" stroke="#222" stroke-width="0.8"/>
+<text x="340" y="46" text-anchor="middle" font-family="DejaVu Sans Mono, monospace">1</text>
+<text x="340" y="28" font-size="8" text-anchor="middle" fill="#888">7</text>
+<rect x="351" y="32" width="22" height="20" fill="none" stroke="#222" stroke-width="0.8"/>
+<text x="362" y="46" text-anchor="middle" font-family="DejaVu Sans Mono, monospace">0</text>
+<text x="362" y="28" font-size="8" text-anchor="middle" fill="#888">8</text>
+<rect x="373" y="32" width="22" height="20" fill="none" stroke="#222" stroke-width="0.8"/>
+<text x="384" y="46" text-anchor="middle" font-family="DejaVu Sans Mono, monospace">2</text>
+<text x="384" y="28" font-size="8" text-anchor="middle" fill="#888">9</text>
+<rect x="395" y="32" width="22" height="20" fill="none" stroke="#222" stroke-width="0.8"/>
+<text x="406" y="46" text-anchor="middle" font-family="DejaVu Sans Mono, monospace">2</text>
+<text x="406" y="28" font-size="8" text-anchor="middle" fill="#888">10</text>
+<rect x="417" y="32" width="22" height="20" fill="none" stroke="#222" stroke-width="0.8"/>
+<text x="428" y="46" text-anchor="middle" font-family="DejaVu Sans Mono, monospace">0</text>
+<text x="428" y="28" font-size="8" text-anchor="middle" fill="#888">11</text>
+<text x="340" y="72" font-size="8" fill="#555">even tiles in the low nibble</text>
+<text x="175" y="108" font-weight="bold">CLUT</text>
+<rect x="220" y="92" width="12" height="24" fill="none" stroke="#999" stroke-width="0.6"/>
+<text x="226" y="127" font-size="8" text-anchor="middle" fill="#555">0</text>
+<rect x="232" y="92" width="12" height="24" fill="none" stroke="#999" stroke-width="0.6"/>
+<rect x="244" y="92" width="12" height="24" fill="none" stroke="#999" stroke-width="0.6"/>
+<rect x="256" y="92" width="40" height="24" fill="#0000ff" stroke="#222" stroke-width="0.8"/>
+<rect x="296" y="92" width="40" height="24" fill="#ffff00" stroke="#222" stroke-width="0.8"/>
+<text x="276" y="107.5" font-size="8" text-anchor="middle" fill="#fff" font-family="DejaVu Sans Mono, monospace">001F</text>
+<text x="316" y="107.5" font-size="8" text-anchor="middle" font-family="DejaVu Sans Mono, monospace">FFE0</text>
+<text x="276" y="127" font-size="8" text-anchor="middle">bg</text>
+<text x="316" y="127" font-size="8" text-anchor="middle">fg</text>
+<rect x="336" y="92" width="12" height="24" fill="none" stroke="#999" stroke-width="0.6"/>
+<rect x="348" y="92" width="12" height="24" fill="none" stroke="#999" stroke-width="0.6"/>
+<rect x="360" y="92" width="12" height="24" fill="none" stroke="#999" stroke-width="0.6"/>
+<rect x="372" y="92" width="12" height="24" fill="none" stroke="#999" stroke-width="0.6"/>
+<rect x="384" y="92" width="12" height="24" fill="none" stroke="#999" stroke-width="0.6"/>
+<rect x="396" y="92" width="12" height="24" fill="none" stroke="#999" stroke-width="0.6"/>
+<rect x="408" y="92" width="12" height="24" fill="none" stroke="#999" stroke-width="0.6"/>
+<rect x="420" y="92" width="12" height="24" fill="none" stroke="#999" stroke-width="0.6"/>
+<rect x="432" y="92" width="12" height="24" fill="none" stroke="#999" stroke-width="0.6"/>
+<rect x="444" y="92" width="12" height="24" fill="none" stroke="#999" stroke-width="0.6"/>
+<rect x="456" y="92" width="12" height="24" fill="none" stroke="#999" stroke-width="0.6"/>
+<rect x="468" y="92" width="12" height="24" fill="none" stroke="#999" stroke-width="0.6"/>
+<text x="474" y="127" font-size="8" text-anchor="middle" fill="#555">15</text>
+<polyline points="296,52 296,91" fill="none" stroke="#222" stroke-width="1" marker-end="url(#a)"/>
+<text x="301" y="72" font-size="8">idx = 3</text>
+<text x="302" y="146" font-size="8" font-family="DejaVu Sans Mono, monospace">word at {CLUT[31:6], idx, 00}</text>
+<polygon points="226,160 366,160 336,195 256,195" fill="#f4f4f4" stroke="#222"/>
+<text x="296" y="182" text-anchor="middle" font-family="DejaVu Sans Mono, monospace">bit ? fg : bg</text>
+<polyline points="296,116 296,159" fill="none" stroke="#222" stroke-width="1" marker-end="url(#a)"/>
+<polyline points="67,248 67,276 196,276 196,178 239.929,178" fill="none" stroke="#222" stroke-width="1" marker-end="url(#a)"/>
+<polyline points="296,195 296,211" fill="none" stroke="#222" stroke-width="1" marker-end="url(#a)"/>
+<rect x="261" y="212" width="70" height="20" fill="#ffff00" stroke="#222" stroke-width="1"/>
+<text x="296" y="226" text-anchor="middle" font-family="DejaVu Sans Mono, monospace">FFE0</text>
+<text x="296" y="246" font-size="8" text-anchor="middle">pixel, RGB565</text>
+<text x="384" y="172" font-weight="bold">one tile,</text>
+<text x="384" y="184" font-weight="bold">two CLUT entries</text>
+<rect x="384" y="192" width="36" height="36" fill="#0000ff" stroke="none" stroke-width="1"/>
+<path d="M397.5,196.5h4.5v4.5h-4.5zM402,196.5h4.5v4.5h-4.5zM393,201h4.5v4.5h-4.5zM397.5,201h4.5v4.5h-4.5zM402,201h4.5v4.5h-4.5zM406.5,201h4.5v4.5h-4.5zM388.5,205.5h4.5v4.5h-4.5zM393,205.5h4.5v4.5h-4.5zM397.5,205.5h4.5v4.5h-4.5zM402,205.5h4.5v4.5h-4.5zM406.5,205.5h4.5v4.5h-4.5zM411,205.5h4.5v4.5h-4.5zM388.5,210h4.5v4.5h-4.5zM393,210h4.5v4.5h-4.5zM397.5,210h4.5v4.5h-4.5zM402,210h4.5v4.5h-4.5zM406.5,210h4.5v4.5h-4.5zM411,210h4.5v4.5h-4.5zM393,214.5h4.5v4.5h-4.5zM397.5,214.5h4.5v4.5h-4.5zM402,214.5h4.5v4.5h-4.5zM406.5,214.5h4.5v4.5h-4.5zM397.5,219h4.5v4.5h-4.5zM402,219h4.5v4.5h-4.5z" fill="#ffff00"/>
+<rect x="384" y="192" width="36" height="36" fill="none" stroke="#222" stroke-width="0.8"/>
+<rect x="442" y="192" width="36" height="36" fill="#ff0000" stroke="none" stroke-width="1"/>
+<path d="M455.5,196.5h4.5v4.5h-4.5zM460,196.5h4.5v4.5h-4.5zM451,201h4.5v4.5h-4.5zM455.5,201h4.5v4.5h-4.5zM460,201h4.5v4.5h-4.5zM464.5,201h4.5v4.5h-4.5zM446.5,205.5h4.5v4.5h-4.5zM451,205.5h4.5v4.5h-4.5zM455.5,205.5h4.5v4.5h-4.5zM460,205.5h4.5v4.5h-4.5zM464.5,205.5h4.5v4.5h-4.5zM469,205.5h4.5v4.5h-4.5zM446.5,210h4.5v4.5h-4.5zM451,210h4.5v4.5h-4.5zM455.5,210h4.5v4.5h-4.5zM460,210h4.5v4.5h-4.5zM464.5,210h4.5v4.5h-4.5zM469,210h4.5v4.5h-4.5zM451,214.5h4.5v4.5h-4.5zM455.5,214.5h4.5v4.5h-4.5zM460,214.5h4.5v4.5h-4.5zM464.5,214.5h4.5v4.5h-4.5zM455.5,219h4.5v4.5h-4.5zM460,219h4.5v4.5h-4.5z" fill="#ffffff"/>
+<rect x="442" y="192" width="36" height="36" fill="none" stroke="#222" stroke-width="0.8"/>
+<text x="402" y="240" font-size="8" text-anchor="middle">CLUT[3]</text>
+<text x="460" y="240" font-size="8" text-anchor="middle">CLUT[3]</text>
+<text x="460" y="251" font-size="8" text-anchor="middle">rewritten</text>
+<text x="384" y="266" font-size="8">bitmap unchanged</text>
+</svg>

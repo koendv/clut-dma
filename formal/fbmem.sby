@@ -1,0 +1,30 @@
+# fbmem: AHB-Lite properties (fahbl_slave.v) and contents (fbmem_wrap.v),
+# with a memory of 2^AW words.
+# sby -f fbmem.sby: the short tasks, AW = 3, tagged default. the long ones,
+# for nightly.sh, AW = 6: sby -f fbmem.sby prove_big cover_big
+
+[tasks]
+prove         small prove default
+cover         small cover default
+prove_big     big prove
+cover_big     big cover
+
+[options]
+prove: mode prove
+cover: mode cover
+cover: depth 20
+
+[engines]
+prove: abc pdr
+cover: smtbmc yices
+
+[script]
+read -formal fahbl_slave.v fbmem_wrap.v fbmem.v
+small: chparam -set AW 3 fbmem_wrap
+big: chparam -set AW 6 fbmem_wrap
+prep -top fbmem_wrap
+
+[files]
+fahbl_slave.v
+fbmem_wrap.v
+../fpga/rtl/fbmem.v

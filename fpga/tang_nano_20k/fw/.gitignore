@@ -1,0 +1,6 @@
+# build output
+*.elf
+*.map
+sim/
+lib-m1/
+lib-host/
