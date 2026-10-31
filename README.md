@@ -220,6 +220,9 @@ overlap.
 frame buffer with a per-tile color lookup table in an MCU DMA engine.* It
 discloses the method and its variants so that they are prior art.
 
+Published on Zenodo, 2026-10-31, with the files of tag `v1.0`:
+[doi:10.5281/zenodo.23835661](https://doi.org/10.5281/zenodo.23835661).
+
 ## License
 
 Text (`clut-dma.md`, `clut-dma.pdf`): CC BY 4.0. Code (Verilog model,
