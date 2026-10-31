@@ -62,6 +62,7 @@ job measure      4h  "make -s measure U8G2=$u8g2 WAIT_STATES='0 1 2 4 8 16 24 32
 # formal: the short tasks, then the long ones
 job formal       1h  "make formal"
 job fbmem-big    4h  "cd formal && sby -f fbmem.sby prove_big cover_big"
+job formal-vert  3h  "cd formal && sby -f clut_dma.sby cover_vert cover_vert0"
 
 echo "done $(date +%Y%m%d-%H%M)" >> "$summary"
 cat "$summary"

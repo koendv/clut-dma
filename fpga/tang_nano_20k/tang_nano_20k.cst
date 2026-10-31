@@ -1,4 +1,4 @@
-// Tang Nano 20K, WeAct ST7789 240x280 on header J5, debug probe on header J6
+// Tang Nano 20K, WeAct ST7789 240x280 and debug probe on header J6
 
 IO_LOC "clk27" 4;
 IO_PORT "clk27" IO_TYPE=LVCMOS33 PULL_MODE=UP;
@@ -27,16 +27,18 @@ IO_PORT "swclk" IO_TYPE=LVCMOS33 PULL_MODE=DOWN;
 IO_LOC "swdio" 74;
 IO_PORT "swdio" IO_TYPE=LVCMOS33 PULL_MODE=UP;
 
-// display, header J5, backlight on J6
-IO_LOC "lcd_sck" 75;
+// display on header J6, pins 20..13 in the order of the display module:
+// 20 GND, 19 3V3, 18 SCL, 17 SDA, 16 RES, 15 DC, 14 CS, 13 BLK. pins 17..20
+// also drive the onboard leds 2..5, which flicker with the spi
+IO_LOC "lcd_sck" 18;
 IO_PORT "lcd_sck" IO_TYPE=LVCMOS33 DRIVE=8;
-IO_LOC "lcd_mosi" 72;
+IO_LOC "lcd_mosi" 19;
 IO_PORT "lcd_mosi" IO_TYPE=LVCMOS33 DRIVE=8;
-IO_LOC "lcd_dc" 71;
+IO_LOC "lcd_dc" 17;
 IO_PORT "lcd_dc" IO_TYPE=LVCMOS33 DRIVE=8;
-IO_LOC "lcd_cs_n" 86;
+IO_LOC "lcd_cs_n" 31;
 IO_PORT "lcd_cs_n" IO_TYPE=LVCMOS33 DRIVE=8;
-IO_LOC "lcd_rst_n" 49;
+IO_LOC "lcd_rst_n" 20;
 IO_PORT "lcd_rst_n" IO_TYPE=LVCMOS33 DRIVE=8;
-IO_LOC "lcd_bl" 76;
+IO_LOC "lcd_bl" 30;
 IO_PORT "lcd_bl" IO_TYPE=LVCMOS33 DRIVE=8;

@@ -20,6 +20,14 @@
   "narrow": a rectangle 1 tile wide on a 320x240 display, for the spi
   underrun measurement.
   "uniform": as "measure", with one clut index for all tiles.
+  "vmeasure": as "measure", the bitmap in vertical layout.
+  vertical layout (clut_dma CTRL bit 4): the bitmap is the tile layout of
+  u8g2, tile t is 8 bytes at fb + 8*t, byte c the pixel column c, bit r the
+  pixel row r; fb 8-byte aligned. FB_START is the address of the first tile. the memory is given to
+  u8x8_clut_stream_rgb565/444() as it is, without conversion. in tests.txt
+  and expected.txt, bit 2 of the format is the vertical layout. memory
+  reads: a map word and a clut word as for the horizontal layout, and 2
+  bitmap words per tile and pixel row.
   "fabric": for fpga/tb/tb_fabric.v, a 240x280 display in the 16 kbyte memory
   of clut_fabric. tests.txt: format tile_cols first w h fb_start. expected.txt:
   the spi bytes with d/c, "c 2a" a command, "d 00" data: the display window
@@ -88,16 +96,16 @@ static void put_cmd(uint8_t b)
   fprintf(expected, "c %02x\n", b);
 }
 
-/* rgb565 to rgb666: 6 bits in bits 7:2, 5-bit red and blue extended by replication */
+/* rgb565 to rgb666: 8 bits per color, widened by replicating the most significant bits */
 static void put_rgb666(uint16_t c)
 {
   uint8_t r5 = (uint8_t)(c >> 11);
   uint8_t g6 = (uint8_t)((c >> 5) & 0x3f);
   uint8_t b5 = (uint8_t)(c & 0x1f);
 
-  put_data((uint8_t)((r5 << 3) | ((r5 >> 4) << 2)));
-  put_data((uint8_t)(g6 << 2));
-  put_data((uint8_t)((b5 << 3) | ((b5 >> 4) << 2)));
+  put_data((uint8_t)((r5 << 3) | (r5 >> 2)));
+  put_data((uint8_t)((g6 << 2) | (g6 >> 4)));
+  put_data((uint8_t)((b5 << 3) | (b5 >> 2)));
 }
 
 /* output of u8x8_clut_stream_rgb565() and u8x8_clut_stream_rgb444() */
@@ -126,13 +134,15 @@ static void wr16(uint32_t addr, uint16_t v)
   the tiles in u8g2 vertical layout, one u8x8 draw tile run, then only the
   pixels and rows inside the rectangle.
 */
-static void request(int fmt, int tile_cols, int tx, int ty, int w, int h, uint32_t fb, uint32_t map, uint32_t clut)
+static void request(int vert, int fmt, int tile_cols, int tx, int ty, int w, int h, uint32_t fb, uint32_t map, uint32_t clut)
 {
   static int t = 0;
+  static clut_t tab;
   u8x8_t u8x8;
   uint8_t vt[8 * 40];
   int first = ty * tile_cols + tx;
-  uint32_t fb_start = fb + 8 * ty * tile_cols + tx;
+  uint32_t fb_start = vert ? fb + 8 * first : fb + 8 * ty * tile_cols + tx;   /* the first tile */
+  int fmt_v = fmt | (vert << 2);
   int n = (w + 7) / 8;
   int i, c, r, k, p;
 
@@ -155,16 +165,17 @@ static void request(int fmt, int tile_cols, int tx, int ty, int w, int h, uint32
   }
   else
   {
-    fprintf(tests, "%x %x %x %x %x %x %x %x\n", fmt, tile_cols, first, w, h, fb_start, map, clut);
-    fprintf(expected, "# %d %d %d %d %d %d\n", t++, fmt, tile_cols, first, w, h);
+    fprintf(tests, "%x %x %x %x %x %x %x %x\n", fmt_v, tile_cols, first, w, h, fb_start, map, clut);
+    fprintf(expected, "# %d %d %d %d %d %d\n", t++, fmt_v, tile_cols, first, w, h);
   }
 
   memset(&u8x8, 0, sizeof(u8x8));
   for ( i = 0; i < U8X8_CLUT_ENTRY_CNT; i++ )
   {
-    u8x8.clut[i][0] = rd16(clut + 4 * i);
-    u8x8.clut[i][1] = rd16(clut + 4 * i + 2);
+    tab[i][0] = rd16(clut + 4 * i);
+    tab[i][1] = rd16(clut + 4 * i + 2);
   }
+  u8x8.clut = tab;
   u8x8.tile_clut_map = mem + map;
 
   /* memory reads of clut_dma, with the clut index kept over the request */
@@ -184,7 +195,9 @@ static void request(int fmt, int tile_cols, int tx, int ty, int w, int h, uint32
           nreads++;
         valid = 1;
         last_idx = idx;
-        if ( c == 0 || fbaddr % 4 == 0 )
+        if ( vert )
+          nreads += 2;
+        else if ( c == 0 || fbaddr % 4 == 0 )
           nreads++;
       }
     fprintf(reads, "%d\n", nreads);
@@ -195,23 +208,31 @@ static void request(int fmt, int tile_cols, int tx, int ty, int w, int h, uint32
 
   for ( k = 0; k * 8 < h; k++ )
   {
-    /* the tiles of this tile row in u8g2 vertical layout */
-    memset(vt, 0, sizeof(vt));
-    for ( i = 0; i < n; i++ )
-      for ( c = 0; c < 8; c++ )
-        for ( r = 0; r < 8; r++ )
-        {
-          int y = 8 * (ty + k) + r;
-          uint8_t b = mem[fb + y * tile_cols + tx + i];
-          if ( b & (0x80 >> c) )
-            vt[8 * i + c] |= (uint8_t)(1 << r);
-        }
+    /* the tiles of this tile row in u8g2 vertical layout: in the memory as
+       it is, or converted from the horizontal layout */
+    uint8_t *tp = vt;
+
+    if ( vert )
+      tp = mem + fb + 8 * (first + k * tile_cols);
+    else
+    {
+      memset(vt, 0, sizeof(vt));
+      for ( i = 0; i < n; i++ )
+        for ( c = 0; c < 8; c++ )
+          for ( r = 0; r < 8; r++ )
+          {
+            int y = 8 * (ty + k) + r;
+            uint8_t b = mem[fb + y * tile_cols + tx + i];
+            if ( b & (0x80 >> c) )
+              vt[8 * i + c] |= (uint8_t)(1 << r);
+          }
+    }
 
     ncap = 0;
     if ( fmt == F_RGB444 )
-      u8x8_clut_stream_rgb444(&u8x8, vt, (uint8_t)n, (uint16_t)(first + k * tile_cols));
+      u8x8_clut_stream_rgb444(&u8x8, tp, (uint8_t)n, (uint16_t)(first + k * tile_cols));
     else
-      u8x8_clut_stream_rgb565(&u8x8, vt, (uint8_t)n, (uint16_t)(first + k * tile_cols));
+      u8x8_clut_stream_rgb565(&u8x8, tp, (uint8_t)n, (uint16_t)(first + k * tile_cols));
 
     /* pixel rows of the tile row, w pixels each */
     for ( r = 0; r < 8 && k * 8 + r < h; r++ )
@@ -241,18 +262,23 @@ static void request(int fmt, int tile_cols, int tx, int ty, int w, int h, uint32
 }
 
 /* random rectangle on a random display. rgb444: even width */
-static void random_request(int fmt)
+static void random_request(int vert, int fmt)
 {
   int tile_cols = 1 + rnd() % 40;
   int tile_rows = MAX_TILES / tile_cols;
-  int tx = rnd() % tile_cols;
-  int ty = rnd() % tile_rows;
-  int w = 1 + rnd() % ((tile_cols - tx) * 8);
-  int h = 1 + rnd() % ((tile_rows - ty) * 8);
+  int tx, ty, w, h;
+
+  /* SIZE.H has 12 bits: at most 4095 pixel rows */
+  if ( tile_rows > 511 )
+    tile_rows = 511;
+  tx = rnd() % tile_cols;
+  ty = rnd() % tile_rows;
+  w = 1 + rnd() % ((tile_cols - tx) * 8);
+  h = 1 + rnd() % ((tile_rows - ty) * 8);
 
   if ( fmt == F_RGB444 && (w & 1) )
     w++;
-  request(fmt, tile_cols, tx, ty, w, h, FB_A, MAP_A, CLUT_A);
+  request(vert, fmt, tile_cols, tx, ty, w, h, vert ? FB_A + 5 : FB_A, MAP_A, CLUT_A);
 }
 
 static void fill_memory(void)
@@ -320,11 +346,11 @@ static int fabric_main(void)
     return 1;
 
   fabric = 1;
-  request(F_RGB444, FAB_COLS, 0, 0, 240, 280, FAB_FB, FAB_MAP, FAB_CLUT);      /* whole screen */
-  request(F_RGB565, FAB_COLS, 3, 5, 56, 32, FAB_FB, FAB_MAP, FAB_CLUT);        /* rectangle */
-  request(F_RGB666, FAB_COLS, 25, 34, 40, 8, FAB_FB, FAB_MAP, FAB_CLUT);       /* bottom right */
-  request(F_RGB565, FAB_COLS, 0, 0, 240, 8, FAB_FB, FAB_MAP, FAB_CLUT);        /* top tile row */
-  request(F_RGB565, FAB_COLS, 1, 1, 37, 13, FAB_FB, FAB_MAP, FAB_CLUT);        /* odd size */
+  request(0, F_RGB444, FAB_COLS, 0, 0, 240, 280, FAB_FB, FAB_MAP, FAB_CLUT);      /* whole screen */
+  request(0, F_RGB565, FAB_COLS, 3, 5, 56, 32, FAB_FB, FAB_MAP, FAB_CLUT);        /* rectangle */
+  request(0, F_RGB666, FAB_COLS, 25, 34, 40, 8, FAB_FB, FAB_MAP, FAB_CLUT);       /* bottom right */
+  request(0, F_RGB565, FAB_COLS, 0, 0, 240, 8, FAB_FB, FAB_MAP, FAB_CLUT);        /* top tile row */
+  request(0, F_RGB565, FAB_COLS, 1, 1, 37, 13, FAB_FB, FAB_MAP, FAB_CLUT);        /* odd size */
 
   fclose(tests);
   fclose(expected);
@@ -339,6 +365,8 @@ int main(int argc, char **argv)
   int measure = argc > 1 && strcmp(argv[1], "measure") == 0;
   int narrow = argc > 1 && strcmp(argv[1], "narrow") == 0;
   int uniform = argc > 1 && strcmp(argv[1], "uniform") == 0;
+  int vmeasure = argc > 1 && strcmp(argv[1], "vmeasure") == 0;
+  int vert;
 
   if ( argc > 1 && strcmp(argv[1], "fabric") == 0 )
     return fabric_main();
@@ -347,42 +375,46 @@ int main(int argc, char **argv)
   if ( !open_files(MEM_SIZE) )
     return 1;
 
+  for ( vert = 0; vert <= 1; vert++ )
   for ( fmt = F_RGB565; fmt <= F_RGB666; fmt++ )
   {
     int odd = (fmt == F_RGB444) ? 0 : 1;   /* rgb444: even widths */
+    /* vertical: the random bitmap 8-byte aligned, FB_A + 5 */
+    uint32_t fb = vert ? FB_A + 5 : FB_A;
 
-    if ( narrow )
+    if ( narrow || uniform || measure )
     {
-      request(fmt, 40, 20, 0, 8, 240, FB_A, MAP_A, CLUT_A);         /* 1 tile wide, 320x240 */
+      if ( vert )
+        continue;
+      if ( narrow )
+        request(0, fmt, 40, 20, 0, 8, 240, FB_A, MAP_A, CLUT_A);    /* 1 tile wide, 320x240 */
+      else
+        request(0, fmt, 30, 0, 0, 240, 240, FB_A, uniform ? MAP_B : MAP_A, CLUT_A); /* whole screen */
       continue;
     }
-    if ( uniform )
+    if ( vmeasure )
     {
-      request(fmt, 30, 0, 0, 240, 240, FB_A, MAP_B, CLUT_A);        /* whole screen, one index */
+      if ( vert )
+        request(1, fmt, 30, 0, 0, 240, 240, fb, MAP_A, CLUT_A);     /* whole screen, vertical */
       continue;
     }
-    if ( measure )
-    {
-      request(fmt, 30, 0, 0, 240, 240, FB_A, MAP_A, CLUT_A);        /* whole screen, 240x240 */
-      continue;
-    }
-    request(fmt, 30, 0, 0, 240, 8, FB_A, MAP_A, CLUT_A);            /* one tile row, 240 wide */
-    request(fmt, 30, 7, 5, 88, 8, FB_A, MAP_A, CLUT_A);             /* run in the middle of a tile row */
-    request(fmt, 30, 29, 29, 8, 8, FB_A, MAP_A, CLUT_A);            /* last tile of 240x240 */
-    request(fmt, 30, 0, 0, 240, 240, FB_A, MAP_A, CLUT_A);          /* whole screen, 240x240 */
-    request(fmt, 30, 4, 10, 72, 48, FB_A, MAP_A, CLUT_A);           /* rectangle */
-    request(fmt, 30, 29, 3, 8, 80, FB_A, MAP_A, CLUT_A);            /* one tile column, right edge */
-    request(fmt, 30, 20, 12, 80, 40, FB_A, MAP_A, CLUT_A);          /* rectangle at the right edge */
-    request(fmt, 40, 0, 0, 320, 240, FB_A, MAP_A, CLUT_A);          /* whole screen, 320x240 */
-    request(fmt, 17, 0, 0, 134 + odd, 240, FB_A, MAP_A, CLUT_A);    /* 135x240, odd width */
-    request(fmt, 30, 0, 0, 240, 135, FB_A, MAP_A, CLUT_A);          /* 240x135, partial tile row */
-    request(fmt, 30, 3, 2, 6 + odd, 3, FB_A, MAP_A, CLUT_A);        /* less than a tile */
-    request(fmt, 30, 0, 0, 240, 16, FB_B, MAP_B, CLUT_B);           /* all background, index 5 */
-    request(fmt, 30, 0, 0, 240, 16, FB_C, MAP_C, CLUT_B);           /* all foreground, index 0 and 15 */
-    request(fmt, 30, 0, 0, 0, 40, FB_A, MAP_A, CLUT_A);             /* empty: w = 0 */
-    request(fmt, 30, 0, 0, 40, 0, FB_A, MAP_A, CLUT_A);             /* empty: h = 0 */
+    request(vert, fmt, 30, 0, 0, 240, 8, fb, MAP_A, CLUT_A);            /* one tile row, 240 wide */
+    request(vert, fmt, 30, 7, 5, 88, 8, fb, MAP_A, CLUT_A);             /* run in the middle of a tile row */
+    request(vert, fmt, 30, 29, 29, 8, 8, fb, MAP_A, CLUT_A);            /* last tile of 240x240 */
+    request(vert, fmt, 30, 0, 0, 240, 240, fb, MAP_A, CLUT_A);          /* whole screen, 240x240 */
+    request(vert, fmt, 30, 4, 10, 72, 48, fb, MAP_A, CLUT_A);           /* rectangle */
+    request(vert, fmt, 30, 29, 3, 8, 80, fb, MAP_A, CLUT_A);            /* one tile column, right edge */
+    request(vert, fmt, 30, 20, 12, 80, 40, fb, MAP_A, CLUT_A);          /* rectangle at the right edge */
+    request(vert, fmt, 40, 0, 0, 320, 240, fb, MAP_A, CLUT_A);          /* whole screen, 320x240 */
+    request(vert, fmt, 17, 0, 0, 134 + odd, 240, fb, MAP_A, CLUT_A);    /* 135x240, odd width */
+    request(vert, fmt, 30, 0, 0, 240, 135, fb, MAP_A, CLUT_A);          /* 240x135, partial tile row */
+    request(vert, fmt, 30, 3, 2, 6 + odd, 3, fb, MAP_A, CLUT_A);        /* less than a tile */
+    request(vert, fmt, 30, 0, 0, 240, 16, FB_B, MAP_B, CLUT_B);         /* all background, index 5 */
+    request(vert, fmt, 30, 0, 0, 240, 16, FB_C, MAP_C, CLUT_B);         /* all foreground, index 0 and 15 */
+    request(vert, fmt, 30, 0, 0, 0, 40, fb, MAP_A, CLUT_A);             /* empty: w = 0 */
+    request(vert, fmt, 30, 0, 0, 40, 0, fb, MAP_A, CLUT_A);             /* empty: h = 0 */
     for ( i = 0; i < 20; i++ )
-      random_request(fmt);
+      random_request(vert, fmt);
   }
 
   fclose(tests);

@@ -5,9 +5,10 @@
 // reads mem.hex (memory image) and tests.txt (one request per line:
 // format tile_cols first w h fb_start map clut, hex; w and h in pixels), writes the received
 // bytes to out.txt, in the format of expected.txt written by ref.c.
+// format bits 1:0 FORMAT, bit 2 the vertical layout (CTRL bit 4).
 //
 // parameter CACHE (iverilog -P tb_clut_dma.CACHE=0): the engine without
-// cache, 3 memory reads per tile and pixel row.
+// cache, 3 memory reads per tile and pixel row; vertical: 4.
 //
 // plusargs:
 //   +ws=N   memory wait states, fixed. default: random 0..3
@@ -188,7 +189,7 @@ module tb_clut_dma;
     end
 
   integer tests, reads, r, t, cycles, limit;
-  reg [31:0] fmt, tile_cols, first, w, h, fb, map, clut, status;
+  reg [31:0] fmt, tile_cols, first, w, h, fb, map, clut, status, nib;
 
   initial begin
     if (!$value$plusargs("ws=%d", ws))
@@ -211,16 +212,18 @@ module tb_clut_dma;
     r = $fscanf(tests, "%h %h %h %h %h %h %h %h\n", fmt, tile_cols, first, w, h, fb, map, clut);
     while (r == 8) begin
       $fwrite(out, "# %0d %0d %0d %0d %0d %0d\n", t, fmt, tile_cols, first, w, h);
+      // FB_START the first tile, MAP_START and MAP_NIBBLE its map entry,
+      // LINE_STRIDE a pixel row (horizontal) or a tile row (vertical)
       apb_wr(5'h08, fb);
-      apb_wr(5'h0C, map);
+      apb_wr(5'h0C, map + first / 2);
       apb_wr(5'h10, clut);
-      apb_wr(5'h14, tile_cols - (w + 7) / 8);   // LINE_OFFSET
-      apb_wr(5'h18, first);
-      apb_wr(5'h1C, { 4'd0, h[11:0], 4'd0, w[11:0] });  // SIZE
+      apb_wr(5'h14, fmt[2] ? 8 * tile_cols : tile_cols);   // LINE_STRIDE
+      apb_wr(5'h18, first & 1);                            // MAP_NIBBLE
+      apb_wr(5'h1C, { 4'd0, h[11:0], 4'd0, w[11:0] });     // SIZE
       req_started = 0;
       req_bytes = 0;
       req_reads = 0;
-      apb_wr(5'h00, { 28'd0, 1'b1, fmt[1:0], 1'b1 });   // IRQ_EN, FORMAT, START
+      apb_wr(5'h00, { 27'd0, fmt[2], 1'b1, fmt[1:0], 1'b1 });   // VERT, IRQ_EN, FORMAT, START
 
       // wait for the interrupt. 64 pixels per tile, at most 3 bytes per pixel
       limit = w * h * (3 * (spi ? spi : 8) + 16) + 2000;   // at most 3 bytes per pixel
@@ -233,10 +236,11 @@ module tb_clut_dma;
         $display("error: test %0d: timeout", t);
         $finish;
       end
-      // memory reads, as computed by ref.c. without cache: 3 per tile and pixel row
+      // memory reads, as computed by ref.c. without cache: 3 per tile and
+      // pixel row; vertical: map, clut and 2 or 3 bitmap words
       if (reads != 0 && $fscanf(reads, "%d\n", exp_reads) == 1) begin
         if (!CACHE)
-          exp_reads = 3 * ((w + 7) / 8) * h;
+          exp_reads = (fmt[2] ? 4 : 3) * ((w + 7) / 8) * h;
         if (req_reads != exp_reads) begin
           $display("error: test %0d: %0d memory reads, expected %0d", t, req_reads, exp_reads);
           errors = errors + 1;
@@ -247,17 +251,19 @@ module tb_clut_dma;
         $display("error: test %0d: status %b", t, status[1:0]);
         errors = errors + 1;
       end
-      // registers the engine updates: FB_START steps per tile, FIRST per
-      // tile row, H per pixel row
+      // registers the engine updates: FB_START per line (a pixel row, or a
+      // tile row vertical), MAP_START and MAP_NIBBLE per tile row, H per
+      // pixel row. at the end: the start of the last line
       if (w != 0 && h != 0) begin
         apb_rd(5'h08, status);
-        if (status != fb + (h - 1) * tile_cols + (w + 7) / 8) begin
+        if (status != (fmt[2] ? fb + 8 * ((h - 1) / 8) * tile_cols : fb + (h - 1) * tile_cols)) begin
           $display("error: test %0d: FB_START %h at the end", t, status);
           errors = errors + 1;
         end
-        apb_rd(5'h18, status);
-        if (status != first + (h - 1) / 8 * tile_cols) begin
-          $display("error: test %0d: FIRST %h at the end", t, status);
+        apb_rd(5'h0C, status);
+        apb_rd(5'h18, nib);
+        if ({ status, nib[0] } != 2 * map + first + (h - 1) / 8 * tile_cols) begin
+          $display("error: test %0d: MAP_START %h nibble %0d at the end", t, status, nib[0]);
           errors = errors + 1;
         end
         apb_rd(5'h1C, status);

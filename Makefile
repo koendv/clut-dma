@@ -26,7 +26,7 @@ WAIT_STATES = 0 1 2 4 8 16
 
 # whole screens, and a rectangle 1 tile wide on a 320x240 display
 measure: $(BUILD)/ref $(BUILD)/sim
-	for m in measure narrow; do \
+	for m in measure narrow vmeasure; do \
 	  mkdir -p $(BUILD)/$$m && (cd $(BUILD)/$$m && ../ref $$m) && \
 	  for p in $(SPI_CYCLES); do for w in $(WAIT_STATES); do \
 	    (cd $(BUILD)/$$m && echo "$$m: `vvp -n ../sim +spi=$$p +ws=$$w | grep -E 'measure|errors' | tr '\n' ' '`" && \

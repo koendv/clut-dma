@@ -347,9 +347,10 @@ module tb_fabric;
       // pixels from clut_dma
       spi_wait;
       apb_wr(SPI_CTRL, C_ON | C_DC | C_STREAM);
-      apb_wr(12'h008, FB + fb_start);
-      apb_wr(12'h014, tile_cols - (w + 7) / 8);   // LINE_OFFSET
-      apb_wr(12'h018, first);
+      apb_wr(12'h008, FB + fb_start);             // FB_START, the first tile
+      apb_wr(12'h00C, MAP + first / 2);           // MAP_START, its map entry
+      apb_wr(12'h014, tile_cols);                 // LINE_STRIDE, a pixel row
+      apb_wr(12'h018, first & 1);                 // MAP_NIBBLE
       apb_wr(12'h01C, { 4'd0, h[11:0], 4'd0, w[11:0] });
       last_edge = 0;
       streaming = 1;

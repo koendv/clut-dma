@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: BSD-2-Clause
 # Copyright (c) 2026 Koen De Vleeschauwer
 #
-# demo.sh: the u8g2 examples on the display, one after the other, then a walk
+# demo.sh: the u8g2 examples and the Adafruit GFX falling stars on the
+# display, one after the other, then a walk
 # through the menu of demo_mui, with keys sent over the uart, one per second.
 # The board must have the bitstream loaded (make load in ..). The firmware is
 # built first, then the script waits for enter, to start a video recording.
@@ -22,11 +23,11 @@ step() {
 # load an example, and show it for some seconds
 show() {
   step "$1"
-  make -s "$1" > /dev/null
+  make -s "$1" > /dev/null 2>&1
   sleep "$2"
 }
 
-make -s palette.elf clutcolor.elf clutclock.elf graphics.elf mui.elf
+make -s palette.elf clutcolor.elf clutclock.elf graphics.elf stars.elf mui.elf
 printf 'start the recording, then press enter: '
 read _
 t0=$(date +%s)
@@ -35,10 +36,11 @@ show palette 5
 show clutcolor 10
 show clutclock 10
 show graphics 20
+show stars 20                   # 10 s sent per star, 10 s whole screens
 
 # demo_mui: d next value, s next field, enter select (main.c, testimg.c)
 step mui
-make -s mui > /dev/null
+make -s mui > /dev/null 2>&1
 stty -F "$TTY" 115200 raw -echo -hupcl
 exec 3>"$TTY"
 sleep 2                         # display init and the first menu page

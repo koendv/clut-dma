@@ -21,6 +21,10 @@
 #define LCD_DIV    1u             /* sck = 54 MHz / 2 = 27 MHz, the fastest */
 #endif
 
+#ifndef STARS_FPS
+#define STARS_FPS  50u            /* falling stars: frames per second */
+#endif
+
 #define FB  (FBMEM + FB_OFS)
 #define MAP (FBMEM + MAP_OFS)
 
@@ -296,8 +300,10 @@ static void lcd_test(void)
 /* ------------------------------------------------------------------ */
 /* clut_dma */
 
-/* rectangle of w x h pixels, top left at tile (tx, ty), its bitmap at fb (a
-   pixel row of COLS bytes), clut at fbmem offset clut; returns hclk cycles */
+/* rectangle of w x h pixels, top left at tile (tx, ty), its first tile at fb
+   (horizontal: a pixel row of COLS bytes; vertical, FMT_VERT: tiles of 8
+   bytes, a tile row of 8 * COLS bytes), clut at fbmem offset clut; returns
+   hclk cycles */
 static uint32_t request(unsigned fmt, uint32_t fb, unsigned tx, unsigned ty, unsigned w, unsigned h, uint32_t clut)
 {
   uint32_t t0, t;
@@ -306,14 +312,14 @@ static uint32_t request(unsigned fmt, uint32_t fb, unsigned tx, unsigned ty, uns
   spi_wait();
   SPI_CTRL = ON | SPI_DC | SPI_STREAM;
   DMA_FB_START = fb;
-  DMA_MAP = MAP;
+  DMA_MAP_START = MAP + (ty * COLS + tx) / 2;
+  DMA_MAP_NIBBLE = (ty * COLS + tx) & 1;
   DMA_CLUT = FBMEM + clut;
-  DMA_LINE_OFFSET = COLS - (w + 7) / 8;
-  DMA_FIRST = ty * COLS + tx;
+  DMA_LINE_STRIDE = (fmt & FMT_VERT) ? 8 * COLS : COLS;
   DMA_SIZE = (h << 16) | w;
   GPIO = GPIO_LED | GPIO_MARK;
   t0 = now();
-  DMA_CTRL = (fmt << 1) | 1;
+  DMA_CTRL = ((fmt & 3u) << 1) | ((fmt & FMT_VERT) ? 0x10u : 0u) | 1u;
   while (!(DMA_STATUS & 2))
     ;
   t = now() - t0;
@@ -338,16 +344,31 @@ static void report(const char *what, uint32_t cycles, uint32_t bytes)
   puts_(" cycles per byte\n");
 }
 
-#if defined(CLUTCOLOR_TEST) || defined(CLUTCLOCK_TEST) || defined(GRAPHICS_TEST) || defined(MUI_TEST)
-/* a display update of a demo: a rectangle of tiles, rgb444. the requests and
-   their hclk cycles are counted; each one is reported if send_verbose */
+#if defined(CLUTCOLOR_TEST) || defined(CLUTCLOCK_TEST) || defined(GRAPHICS_TEST) || defined(MUI_TEST) || defined(STARS_TEST)
+/* the requests of a demo and their hclk cycles */
 static uint32_t send_cnt, send_cycles;
+#endif
+
+#ifdef STARS_TEST
+/* a display update of the Adafruit demo: the bitmap in the horizontal
+   layout, w x h pixels at tile (tx, ty), rgb444 */
+static void send_row(uint8_t tx, uint8_t ty, uint16_t w, uint16_t h, const char *what)
+{
+  (void)what;
+  send_cycles += request(FMT_RGB444, FB + 8u * ty * COLS + tx, tx, ty, w, h, CLUT_OFS);
+  send_cnt++;
+}
+#endif
+
+#if defined(CLUTCOLOR_TEST) || defined(CLUTCLOCK_TEST) || defined(GRAPHICS_TEST) || defined(MUI_TEST)
+/* a display update of a demo: a rectangle of tiles, rgb444. each one is
+   reported if send_verbose */
 static int send_verbose = 1;
 
-static void send_rect(uint16_t fb, uint8_t tx, uint8_t ty, uint8_t tw, uint8_t th, const char *what)
+static void send_rect(uint32_t fb, uint8_t tx, uint8_t ty, uint8_t tw, uint8_t th, const char *what)
 {
   uint32_t w = tw * 8u, h = th * 8u;
-  uint32_t t = request(FMT_RGB444, FBMEM + fb, tx, ty, w, h, CLUT_OFS);
+  uint32_t t = request(DEMO_FMT, FBMEM + fb, tx, ty, w, h, CLUT_OFS);
 
   send_cnt++;
   send_cycles += t;
@@ -379,8 +400,10 @@ static void run(const struct step *s)
     switch (s->kind) {
     case STEP_REQ: {
       uint32_t px = (uint32_t)s->w * s->h;
-      uint32_t bytes = s->fmt == FMT_RGB444 ? px * 3 / 2 : s->fmt == FMT_RGB666 ? px * 3 : px * 2;
-      report(s->name, request(s->fmt, FB + 8 * s->ty * COLS + s->tx, s->tx, s->ty, s->w, s->h, s->clut), bytes);
+      unsigned f = s->fmt & 3u;
+      uint32_t bytes = f == FMT_RGB444 ? px * 3 / 2 : f == FMT_RGB666 ? px * 3 : px * 2;
+      uint32_t fb = (s->fmt & FMT_VERT) ? FB + 8 * (s->ty * COLS + s->tx) : FB + 8 * s->ty * COLS + s->tx;
+      report(s->name, request(s->fmt, fb, s->tx, s->ty, s->w, s->h, s->clut), bytes);
       break;
     }
     case STEP_COLMOD:
@@ -486,6 +509,55 @@ int main(void)
       t0 = now();
       clutclock_tick((volatile uint8_t *)FBMEM, send_rect);
       frame_report(now() - t0);
+    }
+  }
+#endif
+
+#ifdef STARS_TEST
+  {
+    uint32_t next, t0, t1, draw = 0;
+    unsigned frame = 0, late = 0;
+    int full = 0;
+
+    puts_("\nfalling stars, Adafruit GFX, 1 bpp, horizontal layout, ");
+    putdec(STARS_FPS);
+    puts_(" frames per second; every 10 s per star or the whole screen\n");
+    lcd_init();
+    lcd_cmd1(0x3A, 0x03);          /* COLMOD: rgb444 */
+    stars_init((volatile uint8_t *)FBMEM, send_row);
+    send_cnt = send_cycles = 0;
+    next = t1 = now();
+    for (;;) {
+      next += HCLK_HZ / STARS_FPS;
+      if ((int32_t)(now() - next) > 0) {
+        late++;                    /* the frame before took too long */
+        next = now();
+      }
+      while ((int32_t)(now() - next) < 0)
+        ;
+      t0 = now();
+      stars_tick((volatile uint8_t *)FBMEM, send_row, full);
+      draw += now() - t0;
+      if (++frame % STARS_FPS == 0) {
+        /* per frame: requests, clut_dma cycles, draw and send cycles */
+        puts_(full ? "screen: " : "per star: ");
+        putdec(STARS_FPS);
+        puts_(" frames in ");
+        putdec((now() - t1) / (HCLK_HZ / 1000));
+        puts_(" ms, ");
+        putdec(late);
+        puts_(" late; per frame ");
+        putdec(send_cnt / STARS_FPS);
+        puts_(" requests, clut_dma ");
+        putdec(send_cycles / STARS_FPS);
+        puts_(" cycles, draw and send ");
+        putdec(draw / STARS_FPS);
+        puts_(" cycles\n");
+        send_cnt = send_cycles = draw = late = 0;
+        t1 = now();
+        if (frame % (10 * STARS_FPS) == 0)
+          full = !full;
+      }
     }
   }
 #endif

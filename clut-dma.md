@@ -268,11 +268,13 @@ peripheral such as SPI. The bytes are those that u8g2 sends in software:
 |---|---|---|---|
 | RGB565 | 2 per pixel | 1 bit | most significant byte first |
 | RGB444 | 3 per 2 pixels | 2 bits | R0G0, B0R1, G1B1 |
-| RGB666 | 3 per pixel | 1 bit | R, G, B, 6 bits each in bits 7:2 |
+| RGB666 | 3 per pixel | 1 bit | R, G, B, 8 bits each; the 6-bit value in bits 7:2 |
 
-For RGB666, the 5-bit red and blue of the RGB565 CLUT are extended to 6
-bits by replicating the most significant bit (black and white stay
-exact), or by shifting left one bit. The CLUT format does not change.
+For RGB666, the 5-bit red and blue and the 6-bit green of the RGB565 CLUT
+are widened to 8 bits by replicating the most significant bits (black and
+white stay exact), or the 5-bit values are shifted left one bit. A display
+with 18-bit color uses bits 7:2, a display with 24-bit color (RGB888) all 8
+bits. The CLUT format does not change.
 
 A 2-byte skid buffer sits between the output stage and the peripheral.
 All outputs of the engine come from flip-flops. DONE and the interrupt are
@@ -492,6 +494,46 @@ encoding.
     the interrupt handler starts the request for the next buffer once the
     CPU has finished drawing it. Also the requests of the buffers queued as
     linked descriptors (variant 7).
+18. Column order, for the tile layout of u8g2 (variant 6). The display
+    controller fills its memory column by column: in the MIPI DCS
+    controllers (ST7789, ILI9341, GC9A01) the row/column exchange bit MV of
+    MADCTL is set, and the column and row addresses of the window are
+    exchanged. With a window one tile row high, the display expects, for
+    each pixel column of the tile row, its 8 pixels from top to bottom:
+    one byte of the tile layout, bit 0 first. The engine reads the tile
+    row in address order: a word is 4 pixel columns of a tile, 2 words a
+    tile, each byte 8 pixels; the map entry and the CLUT entry are read
+    once per tile, not once per pixel row. For a 240×280 screen that is
+    2,100 bitmap word reads instead of 16,800 in pixel-row order. A
+    rectangle of several tile rows is sent as one request per tile row,
+    each with its window; or in one request, the engine stepping to the
+    next tile row and the window set per tile row by the CPU or by the
+    engine. Also with a page buffer of one
+    tile row. Also for 2 bits per pixel (variant 15): 2 bytes per pixel
+    column of a tile.
+19. Registers as a two-dimensional DMA, for the row layout and the tile
+    layout alike (variant 6). FB_START is the bitmap address of the first
+    tile of the rectangle: the byte of the top left pixel, or in the tile
+    layout the first byte of the top left tile, which is the tile pointer
+    the graphics library already has, also in a page buffer. MAP_START is
+    the address of the map entry of that tile, at nibble resolution: a byte
+    address and the nibble in a register of its own. LINE_STRIDE is the
+    distance from a line to the next: a pixel row in the row layout, a tile
+    row in the tile layout. The distance from a tile to the next follows
+    from the layout: 1 byte, or 8 bytes. The map has as many tiles per row
+    as the bitmap, so its stride follows from LINE_STRIDE: LINE_STRIDE, or
+    LINE_STRIDE / 8, entries. The engine adds the tile's offset in the line
+    to FB_START and to MAP_START, and steps both to the next line, an adder
+    each that does the one or the other depending on the state; FIRST,
+    LINE_OFFSET and the tile number are not needed. SIZE in pixels, split
+    into full tiles (W bits 11:3) and the pixels of a last, partial tile (W
+    bits 2:0); the last tile of a line is found by comparing the tile in the
+    line with W bits 11:3, or with that number plus one when there is a
+    partial tile, without an adder. Also SIZE in tiles only, when the
+    display memory is larger than the glass (variant 9). Also a separate
+    stride for the map, a register for the distance from a tile to the next,
+    and the tile pointer of the library used without conversion in any
+    other layout of fixed-size tiles.
 
 ## 7. Reference implementation
 

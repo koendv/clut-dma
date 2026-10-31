@@ -116,12 +116,12 @@ void border(volatile uint8_t *mem)
 
 /* ------------------------------------------------------------------ */
 /* u8g2: the clut examples of the u8g2 clut branch, drawn by u8g2 in a buffer
-   in horizontal layout in fbmem, tile clut map in fbmem. the display driver
-   u8x8_d_clut_dma sends tile rows with clut_dma; the st7789 driver of u8g2
-   gives the display size and the default palette (rgb444) */
+   in its own vertical layout in fbmem; tile clut map and clut in fbmem. the
+   display driver u8x8_d_clut_dma sends tile rows with clut_dma (CTRL VERT);
+   the st7789 driver of u8g2 gives the display size and the default palette
+   (rgb444) */
 
 static u8g2_t u8g2;
-static volatile uint8_t *drv_mem;     /* fbmem, for u8x8_d_clut_dma */
 static demo_send drv_send;
 
 static uint8_t u8x8_none(u8x8_t *u8x8, uint8_t msg, uint8_t arg_int, void *arg_ptr)
@@ -130,17 +130,11 @@ static uint8_t u8x8_none(u8x8_t *u8x8, uint8_t msg, uint8_t arg_int, void *arg_p
   return 1;
 }
 
-/* the clut of u8g2, uint16_t [16][2] foreground, background: the layout of
-   the clut_dma clut */
-static void u8g2_clut(volatile uint8_t *mem)
-{
-  memcpy((uint8_t *)(uintptr_t)(mem + CLUT_OFS), u8g2.u8x8.clut, sizeof u8g2.u8x8.clut);
-}
-
-/* u8x8 display driver: a tile row of the buffer to the display with clut_dma.
-   the address comes from the tile position, not from the tile pointer: u8g2
-   computes that pointer for the vertical layout. in the page buffer modes the
-   buffer holds the tile rows from u8g2->tile_curr_row on */
+/* u8x8 display driver: a tile row of the buffer to the display with clut_dma,
+   vertical layout. FB_START is the tile pointer of u8g2, in a page buffer
+   too; MAP_START the map entry of its first tile. the clut of u8g2
+   (uint16_t [16][2], foreground, background) has the layout of the clut_dma
+   clut, and is in fbmem */
 static uint8_t u8x8_d_clut_dma(u8x8_t *u8x8, uint8_t msg, uint8_t arg_int, void *arg_ptr)
 {
   switch (msg) {
@@ -149,10 +143,9 @@ static uint8_t u8x8_d_clut_dma(u8x8_t *u8x8, uint8_t msg, uint8_t arg_int, void 
   case U8X8_MSG_DISPLAY_DRAW_TILE: {
     const u8g2_t *u = (const u8g2_t *)u8x8;   /* u8x8 is the first member */
     const u8x8_tile_t *t = (const u8x8_tile_t *)arg_ptr;
-    uint16_t row = (uint16_t)(t->y_pos - u->tile_curr_row);
 
-    u8g2_clut(drv_mem);
-    drv_send((uint16_t)(FB_OFS + row * 8u * u8x8->display_info->tile_width + t->x_pos),
+    /* FB_START is the tile pointer of u8g2, as an offset in fbmem */
+    drv_send(FB_OFS + (uint32_t)(t->tile_ptr - u->tile_buf_ptr),
              t->x_pos, t->y_pos, t->cnt, 1, "tile row");
     return 1;
   }
@@ -166,18 +159,22 @@ static u8g2_t *u8g2_fbmem(volatile uint8_t *mem, uint8_t rows)
 {
   uint8_t *m = (uint8_t *)(uintptr_t)mem;
 
-  drv_mem = mem;
   u8g2_SetupDisplay(&u8g2, u8x8_d_clut_dma, u8x8_cad_001, u8x8_none, u8x8_none);
-  u8g2_SetupBuffer(&u8g2, m + FB_OFS, rows, u8g2_ll_hvline_horizontal_right_lsb, U8G2_R0);
+  u8g2_SetupBuffer(&u8g2, m + FB_OFS, rows, u8g2_ll_hvline_vertical_top_lsb, U8G2_R0);
   memset(m + MAP_OFS, 0, u8x8_clut_map_size(LCD_W, LCD_H));
   u8g2_SetClutMap(&u8g2, m + MAP_OFS);
+  /* the clut in fbmem, ram where clut_dma reads it (not dtcm), 64-byte
+     aligned, with the standard vga colors. u8g2 uses it in place */
+  _Static_assert((CLUT_OFS & 63u) == 0, "clut_dma: clut 64-byte aligned");
+  u8g2_SetClutTable(&u8g2, (const uint16_t (*)[2])(void *)(m + CLUT_OFS));
+  u8g2_SetClutDefaultColors(&u8g2);
   return &u8g2;
 }
 
-/* a rectangle of tiles of the full buffer */
+/* a rectangle of tiles of the full buffer: FB_START is its first tile */
 static void send_area(demo_send send, uint8_t tx, uint8_t ty, uint8_t tw, uint8_t th, const char *what)
 {
-  send((uint16_t)(FB_OFS + 8u * ty * COLS + tx), tx, ty, tw, th, what);
+  send(FB_OFS + 8u * (ty * COLS + tx), tx, ty, tw, th, what);
 }
 
 /* ClutPalette.ino: 2x8 grid, one cell per clut entry, with its name */
@@ -204,7 +201,6 @@ void palette(volatile uint8_t *mem)
     u8g2_SetClutRegion(u, tx0, ty0, cell_tw, cell_th, i);
     u8g2_DrawStr(u, (int16_t)(px0 + (w - str_w) / 2), baseline, color_name[i]);
   }
-  u8g2_clut(mem);
 }
 
 /* ClutColor.ino: dashboard of 4 strips, header SOLAR CELL and TEMP, SUN,
@@ -263,10 +259,10 @@ static void cc_format(char *s, int v, const char *unit)
   *s = 0;
 }
 
-/* the clut to fbmem, then the update */
+/* an update. the clut is in fbmem (u8g2_SetClutTable): nothing to copy */
 static void cc_send(volatile uint8_t *mem, demo_send send, uint8_t tx, uint8_t ty, uint8_t tw, uint8_t th, const char *what)
 {
-  u8g2_clut(mem);
+  (void)mem;
   send_area(send, tx, ty, tw, th, what);
 }
 
@@ -508,8 +504,8 @@ static void draw_clock(volatile uint8_t *mem, demo_send send, uint32_t secs)
   uint8_t seconds = secs % 60;
   uint8_t hour_pos = (hours % 12) * 5 + minutes / 12;
 
+  (void)mem;                     /* the clut is in fbmem: nothing to copy */
   u8g2_SetClutColor(&u8g2, CLUT_RING, rgb_cycle(secs), COLOR_BLACK);
-  drv_mem = mem;
   drv_send = send;
   u8g2_FirstPage(&u8g2);
   do {
@@ -728,8 +724,8 @@ void graphics_page(volatile uint8_t *mem, demo_send send, uint8_t page, uint8_t 
 {
   u8g2_t *u = &u8g2;
 
+  (void)mem;                     /* the clut is in fbmem: nothing to copy */
   u8g2_SetClutColor(u, CLUT_BODY, gt_colors[page], COLOR_BLACK);
-  drv_mem = mem;
   drv_send = send;
   u8g2_FirstPage(u);
   do {
@@ -853,12 +849,11 @@ static void mu_dec(char *s, unsigned v)
   *s = 0;
 }
 
-static void mu_show(volatile uint8_t *mem, demo_send send)
+/* the menu, or the values on FORM_SHOW */
+static void mu_draw(u8g2_t *u)
 {
-  u8g2_t *u = &u8g2;
   char s[6];
 
-  u8g2_ClearBuffer(u);
   mui_Draw(&mui);
   if (mui_GetCurrentFormId(&mui) == FORM_SHOW) {
     /* the values, below the title */
@@ -872,13 +867,31 @@ static void mu_show(volatile uint8_t *mem, demo_send send)
     u8g2_DrawStr(u, 50, 150, "Animal:");
     u8g2_DrawStr(u, 120, 150, mu_animals[mu_animal]);
   }
-  u8g2_clut(mem);
+}
+
+/* a frame. full buffer: drawn, then sent in one request. page buffer
+   (PAGE_ROWS): the picture loop of u8g2, a request per tile row */
+static void mu_show(volatile uint8_t *mem, demo_send send)
+{
+  u8g2_t *u = &u8g2;
+
+  (void)mem;                     /* the clut is in fbmem: nothing to copy */
+#if PAGE_ROWS < ROWS
+  drv_send = send;
+  u8g2_FirstPage(u);
+  do
+    mu_draw(u);
+  while (u8g2_NextPage(u));
+#else
+  u8g2_ClearBuffer(u);
+  mu_draw(u);
   send_area(send, 0, 0, u8x8_GetCols(u8g2_GetU8x8(u)), u8x8_GetRows(u8g2_GetU8x8(u)), "frame");
+#endif
 }
 
 void mui_demo_init(volatile uint8_t *mem, demo_send send)
 {
-  u8g2_t *u = u8g2_fbmem(mem, ROWS);
+  u8g2_t *u = u8g2_fbmem(mem, PAGE_ROWS);
   uint8_t cols = u8x8_GetCols(u8g2_GetU8x8(u)), rows = u8x8_GetRows(u8g2_GetU8x8(u));
 
   u8g2_SetFontPosBaseline(u);
@@ -931,7 +944,7 @@ const struct step pattern_steps[] = {
 
 const struct step palette_steps[] = {
   { STEP_COLMOD, 0x03, 0, 0, 0, 0, 0, 0 },
-  { STEP_REQ,    FMT_RGB444, 0, 0, LCD_W, LCD_H, CLUT_OFS, "dma rgb444 screen" },
+  { STEP_REQ,    DEMO_FMT, 0, 0, LCD_W, LCD_H, CLUT_OFS, "dma rgb444 screen" },
   { STEP_END,    0, 0, 0, 0, 0, 0, 0 }
 };
 

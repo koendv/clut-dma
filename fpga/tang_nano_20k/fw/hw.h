@@ -23,13 +23,13 @@
 #define UART0_BAUDDIV   REG(0x50004010)
 
 /* clut_dma, rtl/clut_dma.v */
-#define DMA_CTRL        REG(0x60000000)   /* bit 0 START, bits 2:1 FORMAT, bit 3 IRQ_EN */
+#define DMA_CTRL        REG(0x60000000)   /* bit 0 START, bits 2:1 FORMAT, bit 3 IRQ_EN, bit 4 VERT */
 #define DMA_STATUS      REG(0x60000004)   /* bit 0 BUSY, bit 1 DONE (write 1 to clear) */
-#define DMA_FB_START    REG(0x60000008)
-#define DMA_MAP         REG(0x6000000C)
+#define DMA_FB_START    REG(0x60000008)   /* bitmap: the first tile */
+#define DMA_MAP_START   REG(0x6000000C)   /* map: the byte of the first tile's entry */
 #define DMA_CLUT        REG(0x60000010)
-#define DMA_LINE_OFFSET REG(0x60000014)
-#define DMA_FIRST       REG(0x60000018)
+#define DMA_LINE_STRIDE REG(0x60000014)   /* bitmap bytes from a line to the next */
+#define DMA_MAP_NIBBLE  REG(0x60000018)   /* bit 0: the entry in the high nibble */
 #define DMA_SIZE        REG(0x6000001C)   /* bits 11:0 W, bits 27:16 H */
 
 #define DMA_RGB565 0u

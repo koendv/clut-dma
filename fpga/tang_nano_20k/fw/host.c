@@ -10,7 +10,8 @@
                m word value: fbmem write, before a request that needs it,
                r fmt fb_start map clut line_offset first size: request
     names.txt  the name of each request
-  usage: host [border | palette | clutcolor | clutclock | graphics | mui]
+  usage: host [border | palette | clutcolor | clutclock | graphics | mui | stars]
+         stars: built with -DWITH_STARS and Adafruit GFX
 */
 
 #include <stdio.h>
@@ -20,6 +21,7 @@
 #define FBMEM 0x80000000u           /* the cpu address of fbmem */
 #define TICKS 12                    /* clutcolor: seconds after the start screen */
 #define CLOCK_TICKS 3               /* clutclock: a whole screen every second */
+#define STARS_TICKS 40              /* stars: frames sent per star */
 
 static uint8_t mem[16384], prev[16384];
 static FILE *f, *n;
@@ -48,20 +50,32 @@ static void request(unsigned fmt, unsigned fb, unsigned tx, unsigned ty, unsigne
 
   sync_mem();
   fprintf(f, "w %x %x %x %x\n", x0, x0 + w - 1, y0, y0 + h - 1);
+  unsigned first = ty * COLS + tx;
+
+  /* FB_START the first tile, MAP_START and MAP_NIBBLE its map entry,
+     LINE_STRIDE a pixel row (horizontal) or a tile row (vertical) */
   fprintf(f, "r %x %x %x %x %x %x %x\n", fmt,
-          FBMEM + fb, FBMEM + MAP_OFS, FBMEM + clut,
-          COLS - (w + 7) / 8, ty * COLS + tx, h << 16 | w);
+          FBMEM + fb, FBMEM + MAP_OFS + first / 2, FBMEM + clut,
+          (fmt & FMT_VERT) ? 8 * COLS : COLS, first & 1, h << 16 | w);
   if (name)
     fprintf(n, "%s\n", name);
 }
 
 /* a display update of a demo, as send_rect() in main.c */
-static void send_rect(uint16_t fb, uint8_t tx, uint8_t ty, uint8_t tw, uint8_t th, const char *what)
+static void send_rect(uint32_t fb, uint8_t tx, uint8_t ty, uint8_t tw, uint8_t th, const char *what)
 {
   if (quiet)
     return;
-  request(FMT_RGB444, fb, tx, ty, tw * 8u, th * 8u, CLUT_OFS, framed ? 0 : what);
+  request(DEMO_FMT, fb, tx, ty, tw * 8u, th * 8u, CLUT_OFS, framed ? 0 : what);
 }
+
+#ifdef WITH_STARS
+/* a display update of the Adafruit demo, as send_row() in main.c */
+static void send_row(uint8_t tx, uint8_t ty, uint16_t w, uint16_t h, const char *what)
+{
+  request(FMT_RGB444, FB_OFS + 8u * ty * COLS + tx, tx, ty, w, h, CLUT_OFS, framed ? 0 : what);
+}
+#endif
 
 /* the end of a frame of several requests: st7789.py draws a picture here */
 static void frame_end(const char *name)
@@ -121,6 +135,21 @@ int main(int argc, char **argv)
       clutclock_tick(mem, send_rect);
       frame_end("clock");
     }
+#ifdef WITH_STARS
+  } else if (strcmp(test, "stars") == 0) {
+    /* frames of falling stars, sent per star; then the same image as a
+       whole screen: the last two frames are the same */
+    fprintf(f, "c 3a\nd 03\n");
+    framed = 1;
+    stars_init(mem, send_row);
+    frame_end("stars");
+    for (i = 0; i < STARS_TICKS; i++) {
+      stars_tick(mem, send_row, 0);
+      frame_end("stars");
+    }
+    send_row(0, 0, LCD_W, LCD_H, 0);
+    frame_end("stars, whole screen");
+#endif
   } else if (strcmp(test, "clutcolor") == 0) {
     fprintf(f, "c 3a\nd 03\n");
     clutcolor_init(mem, send_rect);
@@ -140,7 +169,9 @@ int main(int argc, char **argv)
     for (; s->kind != STEP_END; s++)
       switch (s->kind) {
       case STEP_REQ:
-        request(s->fmt, FB_OFS + 8 * s->ty * COLS + s->tx, s->tx, s->ty, s->w, s->h, s->clut, s->name);
+        request(s->fmt, (s->fmt & FMT_VERT) ? FB_OFS + 8 * (s->ty * COLS + s->tx)
+                                            : FB_OFS + 8 * s->ty * COLS + s->tx,
+                s->tx, s->ty, s->w, s->h, s->clut, s->name);
         break;
       case STEP_COLMOD:
         fprintf(f, "c 3a\nd %02x\n", s->fmt);

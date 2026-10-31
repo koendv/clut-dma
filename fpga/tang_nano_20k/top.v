@@ -4,7 +4,7 @@
 // top: Tang Nano 20K. Gowin Cortex-M1 with clut_fabric (clut_dma, frame
 // memory, spi display master) and a WeAct ST7789 240x280 display.
 //   M1 APB extension master 1 at 0x60000000: clut_fabric registers
-//   M1 AHB extension master 1 at 0x80000000: frame memory, 16 kbyte
+//   M1 AHB extension master 1 at 0x80000000: frame memory, 16 kbyte (source: gowin ip core generator)
 //   clut_dma interrupt: EXTINT[0]
 //   clock: 27 MHz crystal, rPLL to 54 MHz
 
