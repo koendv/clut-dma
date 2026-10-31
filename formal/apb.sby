@@ -1,4 +1,5 @@
-# APB3 properties (fapb3_slave.v) of clut_dma, with and without cache, and spi_lcd.
+# APB3 properties (fapb3_slave.v) of clut_dma behind apb_reg_slave (the
+# Cortex-M1 build), with and without cache, and of spi_lcd.
 # sby -f apb.sby: all tasks. clut_dma: pdr. spi_lcd: k-induction, with the
 # invariants in its FORMAL block, for all DIV values
 
@@ -23,8 +24,8 @@ cover: smtbmc yices
 [script]
 read -formal fapb3_slave.v apb_wrap.v
 # without FORMAL: only the APB properties, not the FORMAL block of clut_dma.v
-dma: read -sv clut_dma.v
-dma0: read -sv clut_dma.v
+dma: read -sv clut_dma.v apb_reg_slave.v
+dma0: read -sv clut_dma.v apb_reg_slave.v
 spi: read -formal spi_lcd.v
 dma: prep -top apb_clut_dma
 dma0: chparam -set CACHE 0 apb_clut_dma
@@ -36,4 +37,5 @@ spi: prep -top apb_spi_lcd
 fapb3_slave.v
 apb_wrap.v
 ../rtl/clut_dma.v
+../fpga/tang_nano_20k_arm/rtl/apb_reg_slave.v
 ../fpga/rtl/spi_lcd.v

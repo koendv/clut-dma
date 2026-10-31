@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: BSD-2-Clause
 // Copyright (c) 2026 Koen De Vleeschauwer
 //
-// APB3 port of clut_dma and spi_lcd against fapb3_slave. All other inputs
-// are free.
+// APB3 port of clut_dma (apb_reg_slave of the Cortex-M1 build and clut_dma)
+// and of spi_lcd, against fapb3_slave. All other inputs are free.
 
 module apb_clut_dma #(
   parameter CACHE = 1
@@ -21,13 +21,24 @@ module apb_clut_dma #(
 
   wire [31:0] prdata;
   wire        pready, pslverr;
+  wire        reg_wr, reg_rd;
+  wire [4:2]  reg_addr;
+  wire [31:0] reg_wdata, reg_rdata;
+
+  apb_reg_slave regs (
+    .psel(psel), .penable(penable), .pwrite(pwrite), .paddr(paddr),
+    .pwdata(pwdata), .prdata(prdata), .pready(pready), .pslverr(pslverr),
+    .reg_wr(reg_wr), .reg_rd(reg_rd), .reg_addr(reg_addr),
+    .reg_wdata(reg_wdata), .reg_rdata(reg_rdata)
+  );
 
   clut_dma #(.CACHE(CACHE)) dut (
     .clk(clk), .rst_n(rst_n),
-    .psel(psel), .penable(penable), .pwrite(pwrite), .paddr(paddr),
-    .pwdata(pwdata), .prdata(prdata), .pready(pready), .pslverr(pslverr),
+    .reg_wr(reg_wr), .reg_rd(reg_rd), .reg_addr(reg_addr),
+    .reg_wdata(reg_wdata), .reg_rdata(reg_rdata),
     .irq(),
     .rd_req(), .rd_addr(), .rd_ack(rd_ack), .rd_data(rd_data),
+    .rd_err(1'b0),
     .byte_valid(), .byte_data(), .byte_ready(byte_ready)
   );
 

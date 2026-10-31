@@ -1,12 +1,16 @@
 # clut_dma: the properties in the FORMAL block of rtl/clut_dma.v,
 # with and without cache.
-# sby -f clut_dma.sby
+# sby -f clut_dma.sby: the proofs and the covers of the horizontal layout,
+# tagged default. the covers of the vertical layout take long, for nightly.sh:
+# sby -f clut_dma.sby cover_vert cover_vert0
 
 [tasks]
-prove         cache1 prove
-prove0        cache0 prove
-cover         cache1 cover
-cover0        cache0 cover
+prove         cache1 prove default
+prove0        cache0 prove default
+cover         cache1 cover rowcov default
+cover0        cache0 cover rowcov default
+cover_vert    cache1 cover vertcov
+cover_vert0   cache0 cover vertcov
 
 [options]
 prove: mode prove
@@ -19,6 +23,8 @@ prove: smtbmc yices
 cover: smtbmc yices
 
 [script]
+rowcov: read -define ROW_COVER
+vertcov: read -define VERT_COVER
 read -formal clut_dma.v
 cache0: chparam -set CACHE 0 clut_dma
 prep -top clut_dma

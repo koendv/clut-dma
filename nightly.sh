@@ -56,12 +56,27 @@ job() {
 # simulation
 job test         30m "make test U8G2=$u8g2"
 job test-nocache 30m "make test-nocache U8G2=$u8g2"
+job ahb          30m "make ahb U8G2=$u8g2"
 job fabric       1h  "make fabric U8G2=$u8g2"
 job measure      4h  "make -s measure U8G2=$u8g2 WAIT_STATES='0 1 2 4 8 16 24 32' > measure.out 2>&1; cat measure.out; ! grep -q '^output differs\|, [1-9][0-9]* errors' measure.out"
+
+# firmware: all tests and demos of both builds compile; the firmware tests
+# of the Cortex-M1 build through the RTL (make sim, the display image)
+fw="fw.elf scl.elf lcd.elf border.elf palette.elf clutcolor.elf clutclock.elf graphics.elf mui.elf stars.elf"
+job fw-arm       30m "make -C fpga/tang_nano_20k_arm/fw U8G2=$u8g2 $fw"
+job fw-rv        30m "make -C fpga/tang_nano_20k_riscv/fw U8G2=$u8g2 $fw"
+# the soldering station in the variants of fpga/measure_solder.sh; the build
+# options are not in the dependencies of solder.elf: built anew each time
+solder="'' 'USE_CLUT_DMA=0' 'USE_CLUT_DMA=0 COLOR=1' 'PAGE_ROWS=1' 'PAGE_ROWS=1 COLOR=1' 'COLOR=1' 'PAGE_ROWS=35' 'PAGE_ROWS=35 COLOR=1'"
+for b in arm riscv; do
+  job solder-$b  30m "cd fpga/tang_nano_20k_$b/fw && for v in $solder; do echo \"== \$v\"; rm -f solder.elf; make solder.elf \$v U8G2=$u8g2 || exit 1; done"
+done
+job sim          2h  "cd fpga/tang_nano_20k_arm/fw && make sim U8G2=$u8g2 && for t in border palette clutcolor clutclock graphics mui stars solder; do make sim U8G2=$u8g2 TEST=\$t || exit 1; done && make sim U8G2=$u8g2 TEST=solder COLOR=1 && make sim U8G2=$u8g2 TEST=solder COLOR=1 USE_CLUT_DMA=0"
 
 # formal: the short tasks, then the long ones
 job formal       1h  "make formal"
 job fbmem-big    4h  "cd formal && sby -f fbmem.sby prove_big cover_big"
+job formal-vert  3h  "cd formal && sby -f clut_dma.sby cover_vert cover_vert0"
 
 echo "done $(date +%Y%m%d-%H%M)" >> "$summary"
 cat "$summary"

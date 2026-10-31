@@ -4,22 +4,23 @@
 <rect width="487" height="340" fill="#fff"/>
 <rect x="0" y="10" width="44" height="40" fill="#f4f4f4" stroke="#222" stroke-width="1"/>
 <text x="22" y="34" font-size="8.5" text-anchor="middle" font-weight="bold">CPU</text>
-<rect x="80" y="4" width="150" height="52" fill="#f4f4f4" stroke="#222" stroke-width="1"/>
+<rect x="80" y="4" width="172" height="52" fill="#f4f4f4" stroke="#222" stroke-width="1"/>
 <text x="86" y="17" font-size="8" font-weight="bold">registers</text>
-<text x="86" y="33" font-size="8" font-family="DejaVu Sans Mono, monospace">CTRL STATUS FB_START MAP</text>
-<text x="86" y="46" font-size="8" font-family="DejaVu Sans Mono, monospace">CLUT LINE_OFFSET FIRST SIZE</text>
+<text x="86" y="33" font-size="8" font-family="DejaVu Sans Mono, monospace">CTRL STATUS FB_START MAP_START</text>
+<text x="86" y="46" font-size="8" font-family="DejaVu Sans Mono, monospace">CLUT LINE_STRIDE MAP_NIBBLE SIZE</text>
 <polyline points="44,24 79,24" fill="none" stroke="#222" stroke-width="1" marker-end="url(#a)"/>
-<text x="62" y="20" font-size="8" text-anchor="middle">APB3</text>
+<text x="62" y="20" font-size="8" text-anchor="middle">bus</text>
 <polyline points="80,40 45,40" fill="none" stroke="#222" stroke-width="1" marker-end="url(#a)"/>
 <text x="62" y="52" font-size="8" text-anchor="middle">IRQ</text>
 <polyline points="110,56 110,85" fill="none" stroke="#222" stroke-width="1" marker-end="url(#a)"/>
 <text x="115" y="74" font-size="8">request</text>
 <rect x="0" y="86" width="150" height="80" fill="#f4f4f4" stroke="#222" stroke-width="1"/>
 <text x="6" y="99" font-size="8" font-weight="bold">fetch stage</text>
-<text x="6" y="111.5" font-size="8">addresses: FB_START, tile,</text>
-<text x="6" y="124" font-size="8" font-family="DejaVu Sans Mono, monospace">{CLUT[31:6], idx, 00}</text>
-<text x="6" y="136.5" font-size="8">kept: map word, bitmap word,</text>
-<text x="6" y="149" font-size="8">CLUT index</text>
+<text x="6" y="111.5" font-size="8">addresses: FB_START + c,</text>
+<text x="6" y="124" font-size="8">MAP_START + c,</text>
+<text x="6" y="136.5" font-size="8" font-family="DejaVu Sans Mono, monospace">{CLUT[31:6], idx, 00}</text>
+<text x="6" y="149" font-size="8">kept: map word, bitmap word,</text>
+<text x="6" y="161.5" font-size="8">CLUT index</text>
 <rect x="175" y="86" width="90" height="80" fill="#f4f4f4" stroke="#222" stroke-width="1"/>
 <text x="181" y="99" font-size="8" font-weight="bold">handoff</text>
 <text x="181" y="111.5" font-size="8" font-weight="bold">register</text>

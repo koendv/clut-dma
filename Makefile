@@ -26,7 +26,7 @@ WAIT_STATES = 0 1 2 4 8 16
 
 # whole screens, and a rectangle 1 tile wide on a 320x240 display
 measure: $(BUILD)/ref $(BUILD)/sim
-	for m in measure narrow; do \
+	for m in measure narrow vmeasure; do \
 	  mkdir -p $(BUILD)/$$m && (cd $(BUILD)/$$m && ../ref $$m) && \
 	  for p in $(SPI_CYCLES); do for w in $(WAIT_STATES); do \
 	    (cd $(BUILD)/$$m && echo "$$m: `vvp -n ../sim +spi=$$p +ws=$$w | grep -E 'measure|errors' | tr '\n' ' '`" && \
@@ -39,9 +39,28 @@ lint:
 	verilator --lint-only -Wall rtl/clut_dma.v
 	verilator --lint-only -Wall -GCACHE=0 rtl/clut_dma.v
 	verilator --lint-only -Wall --top-module clut_fabric $(FABRIC_RTL)
+	verilator --lint-only -Wall fpga/tang_nano_20k_arm/rtl/apb_reg_slave.v
+	verilator --lint-only -Wall fpga/tang_nano_20k_riscv/rtl/ahb_reg_slave.v
+	verilator --lint-only -Wall fpga/tang_nano_20k_riscv/rtl/ahb_rd_master.v
+
+# GoRV32 build: clut_dma behind its AHB-Lite adapters; the tests of make
+# test, and a bus error
+AHB_RTL = rtl/clut_dma.v fpga/tang_nano_20k_riscv/rtl/ahb_reg_slave.v fpga/tang_nano_20k_riscv/rtl/ahb_rd_master.v
+
+ahb: $(BUILD)/ref $(BUILD)/ahb_sim
+	mkdir -p $(BUILD)/ahb
+	cd $(BUILD)/ahb && ../ref && vvp -n ../ahb_sim | tee sim.log
+	grep -q ' 0 errors' $(BUILD)/ahb/sim.log
+	cmp $(BUILD)/ahb/expected.txt $(BUILD)/ahb/out.txt
+	@echo PASS
+
+$(BUILD)/ahb_sim: $(AHB_RTL) tb/tb_clut_dma.v
+	mkdir -p $(BUILD)
+	iverilog -g2005 -Wall -DAHB -o $@ $^
 
 # fpga fabric: clut_dma, fbmem and spi_lcd, as the cpu uses them
-FABRIC_RTL = fpga/rtl/clut_fabric.v fpga/rtl/spi_lcd.v fpga/rtl/fbmem.v rtl/clut_dma.v
+FABRIC_RTL = fpga/tang_nano_20k_arm/rtl/clut_fabric.v fpga/tang_nano_20k_arm/rtl/apb_reg_slave.v \
+	fpga/rtl/spi_lcd.v fpga/rtl/fbmem.v rtl/clut_dma.v
 
 fabric: $(BUILD)/ref $(BUILD)/fabric_sim
 	mkdir -p $(BUILD)/fabric
@@ -66,7 +85,7 @@ size:
 # formal proofs and covers with SymbiYosys, the short tasks (minutes).
 # nightly.sh runs the long ones.
 formal:
-	cd formal && sby -f apb.sby && sby -f clut_dma.sby && sby -f fbmem.sby
+	cd formal && sby -f clut_dma.sby && sby -f fbmem.sby && sby -f ahb.sby && sby -f apb.sby
 
 pdf: clut-dma.pdf README.pdf
 
@@ -83,6 +102,27 @@ zip:
 	@echo "$(BUILD)/clut-dma.zip: commit `git rev-parse HEAD`"
 	@git diff --quiet HEAD || echo "warning: uncommitted changes, not in the zip"
 
+# the binaries of the last commit, in their directories: the bitstreams and
+# the firmware of both fpga builds. the bitstreams must be up to date (Gowin
+# EDA, make in fpga/tang_nano_20k_*); the firmware is built anew, solder.elf
+# in color as make demo-solder runs it
+BIN_FW = fw scl lcd border palette clutcolor clutclock graphics mui stars
+
+binzip:
+	@git diff --quiet HEAD || { echo "binzip: uncommitted changes"; exit 1; }
+	for b in arm riscv; do \
+	  $(MAKE) -s -q -C fpga/tang_nano_20k_$$b || { echo "binzip: bitstream of $$b not up to date"; exit 1; }; \
+	  cd fpga/tang_nano_20k_$$b/fw && rm -f *.elf && \
+	  $(MAKE) -s U8G2=$(abspath $(U8G2)) $(addsuffix .elf,$(BIN_FW)) > /dev/null && \
+	  $(MAKE) -s U8G2=$(abspath $(U8G2)) solder.elf COLOR=1 > /dev/null && cd ../../.. || exit 1; \
+	done
+	mkdir -p $(BUILD)
+	rm -f $(BUILD)/clut-dma-bin-`git rev-parse --short HEAD`.zip
+	zip -q -X $(BUILD)/clut-dma-bin-`git rev-parse --short HEAD`.zip \
+	  fpga/tang_nano_20k_arm/impl/pnr/clut_m1.fs fpga/tang_nano_20k_riscv/impl/pnr/clut_rv.fs \
+	  fpga/tang_nano_20k_arm/fw/*.elf fpga/tang_nano_20k_riscv/fw/*.elf
+	@ls -l $(BUILD)/clut-dma-bin-`git rev-parse --short HEAD`.zip
+
 $(BUILD)/ref: tb/ref.c $(U8G2)/csrc/u8x8_clut.c
 	mkdir -p $(BUILD)
 	$(CC) $(CFLAGS) -o $@ $^
@@ -98,4 +138,4 @@ $(BUILD)/sim_nocache: rtl/clut_dma.v tb/tb_clut_dma.v
 clean:
 	rm -rf $(BUILD)
 
-.PHONY: test test-nocache measure size formal fabric lint pdf zip clean
+.PHONY: test test-nocache ahb measure size formal fabric lint pdf zip binzip clean

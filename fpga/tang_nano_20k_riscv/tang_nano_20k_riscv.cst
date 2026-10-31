@@ -1,0 +1,49 @@
+// Tang Nano 20K, GoRV32 build: WeAct ST7789 240x280 on header J6, debug probe on J6 and J5
+
+IO_LOC "clk27" 4;
+IO_PORT "clk27" IO_TYPE=LVCMOS33 PULL_MODE=UP;
+
+// buttons S1 (reset) and S2, high when pressed
+IO_LOC "btn_s1" 88;
+IO_PORT "btn_s1" IO_TYPE=LVCMOS33;
+IO_LOC "btn_s2" 87;
+IO_PORT "btn_s2" IO_TYPE=LVCMOS33;
+
+// leds, low is on. the timing mark is on led 1, also on header J6
+IO_LOC "led_n" 15;
+IO_PORT "led_n" IO_TYPE=LVCMOS33 DRIVE=8;
+IO_LOC "mark" 16;
+IO_PORT "mark" IO_TYPE=LVCMOS33 DRIVE=8;
+
+// usb serial, BL616
+IO_LOC "uart_tx" 69;
+IO_PORT "uart_tx" IO_TYPE=LVCMOS33;
+IO_LOC "uart_rx" 70;
+IO_PORT "uart_rx" IO_TYPE=LVCMOS33 PULL_MODE=UP;
+
+// GoRV32 jtag: tck J6 1, tms J6 2, tdi J6 3, tdo J5 3. tck and tms on the
+// pins of swclk and swdio in the Cortex-M1 build
+IO_LOC "jtag_tck" 73;
+IO_PORT "jtag_tck" IO_TYPE=LVCMOS33 PULL_MODE=DOWN;
+IO_LOC "jtag_tms" 74;
+IO_PORT "jtag_tms" IO_TYPE=LVCMOS33 PULL_MODE=UP;
+IO_LOC "jtag_tdi" 75;
+IO_PORT "jtag_tdi" IO_TYPE=LVCMOS33 PULL_MODE=UP;
+IO_LOC "jtag_tdo" 76;
+IO_PORT "jtag_tdo" IO_TYPE=LVCMOS33;
+
+// display on header J6, pins 20..13 in the order of the display module:
+// 20 GND, 19 3V3, 18 SCL, 17 SDA, 16 RES, 15 DC, 14 CS, 13 BLK. pins 17..20
+// also drive the onboard leds 2..5, which flicker with the spi
+IO_LOC "lcd_sck" 18;
+IO_PORT "lcd_sck" IO_TYPE=LVCMOS33 DRIVE=8;
+IO_LOC "lcd_mosi" 19;
+IO_PORT "lcd_mosi" IO_TYPE=LVCMOS33 DRIVE=8;
+IO_LOC "lcd_dc" 17;
+IO_PORT "lcd_dc" IO_TYPE=LVCMOS33 DRIVE=8;
+IO_LOC "lcd_cs_n" 31;
+IO_PORT "lcd_cs_n" IO_TYPE=LVCMOS33 DRIVE=8;
+IO_LOC "lcd_rst_n" 20;
+IO_PORT "lcd_rst_n" IO_TYPE=LVCMOS33 DRIVE=8;
+IO_LOC "lcd_bl" 30;
+IO_PORT "lcd_bl" IO_TYPE=LVCMOS33 DRIVE=8;

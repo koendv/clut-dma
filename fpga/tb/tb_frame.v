@@ -2,15 +2,16 @@
 // Copyright (c) 2026 Koen De Vleeschauwer
 //
 // tb_frame: the spi bytes clut_fabric sends for a firmware test, for the image
-// the display ought to show. Input from fpga/tang_nano_20k/fw/host.c:
+// the display ought to show. Input from fpga/tang_nano_20k_arm/fw/host.c:
 //   mem.hex    fbmem, loaded directly into the block ram
 //   steps.txt  c XX            command byte, chip select high before it
 //              d XX            parameter byte
 //              w x0 x1 y0 y1   display window: CASET, RASET, RAMWR
 //              m word value    fbmem write, directly into the block ram
 //              f               end of a frame: an "f" line in spi.txt
-//              r fmt fb_start map clut line_offset first size
-//                              clut_dma request, streamed through spi_lcd
+//              r fmt fb_start map clut line_stride map_nibble size
+//                              clut_dma request, streamed through spi_lcd;
+//                              fmt bits 1:0 FORMAT, bit 2 VERT, bit 3 NO_MAP
 // as the firmware does it, with the spi at clk / 2.
 // Writes spi.txt, "c xx" or "d xx" per byte, for fpga/tb/st7789.py.
 
@@ -175,12 +176,12 @@ module tb_frame;
           spi_wait;
           apb_wr(SPI_CTRL, ON | C_DC | C_STREAM);
           apb_wr(12'h008, a1);              // FB_START
-          apb_wr(12'h00C, a2);              // MAP
+          apb_wr(12'h00C, a2);              // MAP_START
           apb_wr(12'h010, a3);              // CLUT
-          apb_wr(12'h014, a4);              // LINE_OFFSET
-          apb_wr(12'h018, a5);              // FIRST
+          apb_wr(12'h014, a4);              // LINE_STRIDE
+          apb_wr(12'h018, a5);              // MAP_NIBBLE
           apb_wr(12'h01C, a6);              // SIZE
-          apb_wr(12'h000, { 29'd0, a0[1:0], 1'b1 });   // FORMAT, START
+          apb_wr(12'h000, { 26'd0, a0[3:2], 1'b0, a0[1:0], 1'b1 });   // NO_MAP, VERT, FORMAT, START
           s = 0;
           while (!s[1])
             apb_rd(12'h004, s);

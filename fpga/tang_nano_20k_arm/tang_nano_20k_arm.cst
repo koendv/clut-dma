@@ -1,0 +1,44 @@
+// Tang Nano 20K, WeAct ST7789 240x280 and debug probe on header J6
+
+IO_LOC "clk27" 4;
+IO_PORT "clk27" IO_TYPE=LVCMOS33 PULL_MODE=UP;
+
+// buttons S1 (reset) and S2, high when pressed
+IO_LOC "btn_s1" 88;
+IO_PORT "btn_s1" IO_TYPE=LVCMOS33;
+IO_LOC "btn_s2" 87;
+IO_PORT "btn_s2" IO_TYPE=LVCMOS33;
+
+// leds, low is on. the timing mark is on led 1, also on header J6
+IO_LOC "led_n" 15;
+IO_PORT "led_n" IO_TYPE=LVCMOS33 DRIVE=8;
+IO_LOC "mark" 16;
+IO_PORT "mark" IO_TYPE=LVCMOS33 DRIVE=8;
+
+// usb serial, BL616
+IO_LOC "uart_tx" 69;
+IO_PORT "uart_tx" IO_TYPE=LVCMOS33;
+IO_LOC "uart_rx" 70;
+IO_PORT "uart_rx" IO_TYPE=LVCMOS33 PULL_MODE=UP;
+
+// serial wire debug, header J6
+IO_LOC "swclk" 73;
+IO_PORT "swclk" IO_TYPE=LVCMOS33 PULL_MODE=DOWN;
+IO_LOC "swdio" 74;
+IO_PORT "swdio" IO_TYPE=LVCMOS33 PULL_MODE=UP;
+
+// display on header J6, pins 20..13 in the order of the display module:
+// 20 GND, 19 3V3, 18 SCL, 17 SDA, 16 RES, 15 DC, 14 CS, 13 BLK. pins 17..20
+// also drive the onboard leds 2..5, which flicker with the spi
+IO_LOC "lcd_sck" 18;
+IO_PORT "lcd_sck" IO_TYPE=LVCMOS33 DRIVE=8;
+IO_LOC "lcd_mosi" 19;
+IO_PORT "lcd_mosi" IO_TYPE=LVCMOS33 DRIVE=8;
+IO_LOC "lcd_dc" 17;
+IO_PORT "lcd_dc" IO_TYPE=LVCMOS33 DRIVE=8;
+IO_LOC "lcd_cs_n" 31;
+IO_PORT "lcd_cs_n" IO_TYPE=LVCMOS33 DRIVE=8;
+IO_LOC "lcd_rst_n" 20;
+IO_PORT "lcd_rst_n" IO_TYPE=LVCMOS33 DRIVE=8;
+IO_LOC "lcd_bl" 30;
+IO_PORT "lcd_bl" IO_TYPE=LVCMOS33 DRIVE=8;

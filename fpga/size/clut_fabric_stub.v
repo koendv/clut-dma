@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: BSD-2-Clause
 // Copyright (c) 2026 Koen De Vleeschauwer
 //
-// clut_fabric stub: the ports of fpga/rtl/clut_fabric.v, constant outputs, an
-// idle bus slave. For the size of the processor alone
-// (fpga/tang_nano_20k/size.sh).
+// clut_fabric stub: the ports of fpga/tang_nano_20k_arm/rtl/clut_fabric.v,
+// constant outputs, an idle bus slave. For the size of the processor alone
+// (fpga/tang_nano_20k_arm/size.sh).
 
 module clut_fabric (
   input             clk,

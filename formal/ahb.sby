@@ -1,0 +1,31 @@
+# AHB-Lite adapters of the GoRV32 build (ahb_wrap.v): ahb_reg_slave against
+# fahbl_slave.v, ahb_rd_master against fahbl_master.v.
+# sby -f ahb.sby: all tasks.
+
+[tasks]
+slave_prove     slave prove default
+slave_cover     slave cover default
+master_prove    master prove default
+master_cover    master cover default
+
+[options]
+prove: mode prove
+cover: mode cover
+cover: depth 20
+
+[engines]
+prove: abc pdr
+cover: smtbmc yices
+
+[script]
+slave: read -formal fahbl_slave.v ahb_wrap.v ahb_reg_slave.v
+slave: prep -top ahb_reg_slave_wrap
+master: read -formal fahbl_master.v ahb_wrap.v ahb_rd_master.v
+master: prep -top ahb_rd_master_wrap
+
+[files]
+fahbl_slave.v
+fahbl_master.v
+ahb_wrap.v
+../fpga/tang_nano_20k_riscv/rtl/ahb_reg_slave.v
+../fpga/tang_nano_20k_riscv/rtl/ahb_rd_master.v
