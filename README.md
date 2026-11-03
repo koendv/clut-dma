@@ -5,10 +5,12 @@ Color for a 1 bpp frame buffer, in hardware.
 https://github.com/user-attachments/assets/efce7386-0580-4d9f-b6e8-e7e7da05f02c
 
 The video shows a Cortex-M1 soft core on a Tang Nano 20K FPGA, running the
-u8g2 graphics library on an ST7789 display. Each demo uses a full-screen frame
-buffer and fits in about 10 kB of RAM; a 16-bit color frame buffer for the
-same 240×280 display would take 134 kB. The CPU draws in black and white; the
-DMA engine adds the color while it sends the image to the display.
+u8g2 and Adafruit GFX graphics libraries on an ST7789 display. The Cortex-M1
+runs at 54 MHz and the SPI at 27 MHz; a whole screen in RGB444 takes 30 ms
+to send. Each demo uses a full-screen frame buffer and fits in about 10 kB
+of RAM; a 16-bit color frame buffer for the same 240×280 display would take
+134 kB. The CPU draws in black and white; the DMA engine adds the color
+while it sends the image to the display.
 
 Memory for the 240×280 display of the prototype: in color the bitmap, tile
 map and CLUT; monochrome (NO_MAP), one color pair for all tiles, the bitmap

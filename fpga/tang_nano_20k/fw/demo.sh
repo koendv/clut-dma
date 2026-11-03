@@ -2,9 +2,9 @@
 # SPDX-License-Identifier: BSD-2-Clause
 # Copyright (c) 2026 Koen De Vleeschauwer
 #
-# demo.sh: the u8g2 examples and the Adafruit GFX falling stars on the
-# display, one after the other, then a walk
-# through the menu of demo_mui, with keys sent over the uart, one per second.
+# demo.sh: the u8g2 examples on the display, one after the other, a walk
+# through the menu of demo_mui, with keys sent over the uart,
+# then the falling stars of Adafruit GFX.
 # The board must have the bitstream loaded (make load in ..). The firmware is
 # built first, then the script waits for enter, to start a video recording.
 # It prints the time of each step, for cutting and captions.
@@ -32,11 +32,10 @@ printf 'start the recording, then press enter: '
 read _
 t0=$(date +%s)
 
-show palette 5
+show palette 2
 show clutcolor 10
-show clutclock 10
-show graphics 20
-show stars 20                   # 10 s sent per star, 10 s whole screens
+show clutclock 5
+show graphics 17                # one cycle, about 16 s
 
 # demo_mui: d next value, s next field, enter select (main.c, testimg.c)
 step mui
@@ -51,8 +50,15 @@ for keys in E ddddd sddddd sddddd s E s E; do
     else
       printf '%s' "$k" >&3
     fi
-    sleep 1
+    if [ "$k" = d ]; then
+      sleep 0.3                 # a value: counts up (GNU sleep)
+    else
+      sleep 1                   # a field or a form: time to see it
+    fi
   done
 done
 exec 3>&-
+
+# Adafruit GFX, row layout
+show stars 10                   # the first 10 s: sent per star, at 50 fps
 step end
