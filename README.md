@@ -2,7 +2,7 @@
 
 Color for a 1 bpp frame buffer, in hardware.
 
-https://github.com/user-attachments/assets/efce7386-0580-4d9f-b6e8-e7e7da05f02c
+https://github.com/user-attachments/assets/470c7089-7e80-47fd-9ec0-2cefbdd4fae9
 
 The video shows a Cortex-M1 soft core on a Tang Nano 20K FPGA, running the
 u8g2 and Adafruit GFX graphics libraries on an ST7789 display. The Cortex-M1
@@ -12,9 +12,9 @@ of RAM; a 16-bit color frame buffer for the same 240×280 display would take
 134 kB. The CPU draws in black and white; the DMA engine adds the color
 while it sends the image to the display.
 
-Memory for the 240×280 display of the prototype: in color the bitmap, tile
-map and CLUT; monochrome (NO_MAP), one color pair for all tiles, the bitmap
-and one CLUT word.
+The CPU draws a monochrome image; the DMA engine performs color expansion during transmission. There is no intermediate color framebuffer. Uses no block RAM or multipliers inside the DMA engine.
+
+Memory needed for the 240×280 ST7789 display of the prototype:
 
 | buffer | color | monochrome |
 |---|---|---|
@@ -22,130 +22,115 @@ and one CLUT word.
 | page buffer, 1 tile row (8 pixel rows) | 829 bytes | 244 bytes |
 | two page buffers, 1 tile row each | 1,069 bytes | 484 bytes |
 
-Because the engine, not the CPU, does the color expansion, the CPU is free
-while the image is sent. With two bitmaps, the CPU draws the next frame
-while the engine sends the current one. With two page buffers of one tile
-row, the CPU draws a tile row while the engine sends the previous one.
+- One tile row is 8 pixel rows.
+- Color is: each 8×8 pixel tile chooses from 16 foreground/background color pairs.
+- Monochrome is: the whole display uses one foreground/background color pair, e.g. black/white.
+
+This is sufficient color for a display on an industrial tool, not for displaying photos, or color gradients.
+
+Because the engine, not the CPU, does the color expansion, the CPU is free while the image is being sent.
+With two page buffers of one tile row, the CPU draws a tile row while the engine sends the previous one.
 
 ## Why
 
-I made a debugger with an ST7789 color display and LVGL
-([at32f405-app](https://github.com/koendv/at32f405-app)). The graphics took
-the RAM, and the LVGL tick took the real-time behavior of the CPU. The
-second version
-([arm_can_tool](https://github.com/koendv/arm_can_tool)) has an SH1107
-OLED and u8g2. That works well, but the OLED is single-source.
+I made a debugger with an ST7789 color display and LVGL ([at32f405-app](https://github.com/koendv/at32f405-app)).
+The graphics took the RAM, and the LVGL tick took the real-time behavior of the CPU.
+The second version ([arm_can_tool](https://github.com/koendv/arm_can_tool)) has an SH1107 OLED and u8g2.
+That works well, but the OLED is single-source.
 
-I want a display that is low-cost, easily sourced, uses little RAM, and
-does not use the CPU when the image does not change.
+I want a display that is low-cost, easily sourced, uses little RAM, and does not use the CPU when the image does not change.
 
-The color drivers of the u8g2 branch [clut](https://github.com/koendv/u8g2) let u8g2 drive the color
-displays that every supplier sells. clut_dma does the same in hardware: a
-low-cost MCU can drive a color display, and a larger MCU keeps its RAM and
-its CPU time for the application, not for the graphics.
+The color drivers of the u8g2 branch [clut](https://github.com/koendv/u8g2) let u8g2 drive the color displays that every supplier sells.
+clut_dma does the same in hardware: a low-cost MCU can drive a color display, and a larger MCU keeps its RAM and its CPU time for the application, not for the graphics.
 
 ## Example: a soldering station
 
-A soldering station or a wall thermostat often has a 128×64 monochrome
-OLED. With 16×16 Chinese characters that is 4 lines of 8 characters:
-enough for 温度 and a number, but menu labels and error texts become
-characters the user has to guess. A 240×240 smartwatch panel (ST7789) is
-a commodity part and has room for 10 lines of 10 characters of 24×24
-pixels. The same holds for other scripts that need more pixels per
-character than Latin: Japanese, Korean, Arabic, Devanagari.
+A soldering station or a wall thermostat often has a 128×64 monochrome OLED.
+With 16×16 Chinese characters that is 4 lines of 8 characters:
+enough for 温度 and a number, but menu labels and error texts become characters the user has to guess.
+A 240×240 smartwatch panel (ST7789) is a commodity part and has room for 10 lines of 10 characters of 24×24 pixels. 
+At 16×16 pixels, complex characters collapse; at 24×24 pixels, common characters stay distinct and legible.
+The same holds for other scripts that need more pixels per character than Latin: Japanese, Korean, Arabic, Devanagari.
 
-What keeps the product on the small OLED is the RAM: a 16-bit frame buffer
-for 240×240 is 115,200 bytes, more than an M0-class MCU with 8 to 32 kB
-has. A 1-bit bitmap with a tile map and a CLUT fits: a page buffer in any
-of them, the full screen from about 16 kB.
+What keeps the product on the small OLED is the RAM:
+a 16-bit frame buffer for 240×240 is 115,200 bytes, more than an M0-class MCU with 8 to 32 kB has.
+A 1-bit bitmap with a tile map and a CLUT fits: a page buffer fits in any MCU, the full screen buffer fits from about 16 kB.
 
 | buffer, 240×240 | color | monochrome |
 |---|---|---|
 | full screen | 7,714 bytes | 7,204 bytes |
 | page buffer, 1 tile row | 754 bytes | 244 bytes |
 
-Legible characters alone need only the monochrome column: 244 bytes, which
-fits in the RAM the product already spends on its OLED (1,024 bytes for a
-full 128×64 buffer). Color per character costs 510 bytes more: a 24×24
-character on a 24-pixel grid is 3×3 tiles, so each character can have its
-own colors.
+Legible characters alone need only the monochrome column: 244 bytes, which fits in the RAM the product already spends on its OLED (1,024 bytes for a full 128×64 buffer).
+Color per character costs 510 bytes more: a 24×24 character on a 24-pixel grid is 3×3 tiles, so each character can have its own colors.
 
-Today this works in software, with the color drivers of the u8g2 branch
-`clut` on the MCU the product already has; the CPU expands the colors
-while it sends. Perhaps a future MCU will have clut_dma (today a
-prototype on an FPGA); then the engine does that, and the CPU is free
-while the image is sent.
+Today this works in software, with the color drivers of the u8g2 branch `clut` on the MCU the product already has; the CPU expands the colors while it sends.
+Perhaps a future MCU will have clut_dma (today a prototype on an FPGA); then the engine does the expansion to color, and the CPU is free while the image is sent.
 
-The fonts take flash: 72 bytes per character, about 22 kB for the 300
-characters of a menu.
+The fonts need flash: 72 bytes per character, about 22 kB for the 300 characters of a menu.
 
 ## Description
 
 Three areas in memory:
 
 - a bitmap of 1 bit per pixel, in which the CPU draws;
-- a tile map, with a 4-bit index for each 8×8 tile;
+- a tile map, with a 4-bit index for each 8×8 tile; not needed if the image is black and white (monochrome).
 - a color lookup table (CLUT) of 16 foreground/background color pairs.
 
-The DMA engine reads them and sends RGB565, RGB444 or RGB666 pixels straight
-to an SPI display: no color frame buffer.
+The DMA engine reads the 1 bpp bitmap, tile map and color lookup table, and sends RGB565, RGB444 or RGB666 pixels straight to an SPI display.
+There is no color frame buffer anywhere.
 
 The bitmap is in one of two layouts:
 
-- row layout: a byte is 8 pixels of a pixel row, leftmost pixel in bit 7, as
-  the 1-bit buffers of LVGL and Adafruit GFX;
-- vertical layout (CTRL bit 4), the tile layout of u8g2: tile *t* is 8 bytes,
-  a byte is a pixel column of the tile, top pixel in bit 0.
+- row layout: a byte is 8 pixels of a pixel row, leftmost pixel in bit 7, as the 1-bit buffers of LVGL and Adafruit GFX;
+- vertical layout, the tile layout of u8g2: a tile is 8×8 pixel, stored as 8 consecutive bytes.
+  byte *c* is pixel column *c*, bit *r* is pixel row *r*, top pixel in bit 0.
 
-A request is a rectangle that starts on a tile. A whole screen is one
-request. The CPU writes:
+A request is a rectangle that starts on a tile. A whole screen is one request. The CPU writes:
 
-- FB_START: the bitmap address of the first tile. Row layout: the byte of
-  the top left pixel, any address. Vertical layout: the first byte of the top
-  left tile, 8-byte aligned; for u8g2 the tile pointer it passes to the
-  display driver, also in a page buffer.
-- MAP_START and MAP_NIBBLE: the byte of the tile map with the entry of the
-  first tile, and which nibble (0 low, 1 high). With CTRL bit 5 (NO_MAP)
-  there is no tile map: every tile has CLUT entry 0, and the engine reads no
-  map. For a plain bitmap the CLUT is then one word, 64-byte aligned:
-  0x0000FFFF white on black, 0xFFFF0000 black on white, in every format.
-- LINE_STRIDE: the bitmap bytes from a line to the next: row layout from a
-  pixel row to the next (the tiles per row), vertical layout from a tile row
-  to the next (8 × the tiles per row). The tile map has as many tiles per
-  row as the bitmap; its stride follows from LINE_STRIDE.
-- SIZE: width and height in pixels. A last tile of fewer than 8 pixels is
-  sent in part, for displays whose memory is not wider or taller than the
-  glass (ILI9225: 220 rows). RGB444: an even width.
+- FB_START: the bitmap address of the first tile.
+  Row layout: the byte of the top left pixel, any address.
+  Vertical layout: the first byte of the top left tile, 8-byte aligned;
+  for u8g2 this is the tile pointer it passes to the display driver.
+- MAP_START and MAP_NIBBLE: the byte of the tile map with the entry of the first tile, and which nibble (0 low, 1 high).
+- If CTRL bit NO_MAP is set, there is no tile map: every tile has CLUT entry 0, and the engine reads no map.
+  For a plain bitmap the CLUT is then one word, 64-byte aligned:
+  0x0000FFFF for white on black, 0xFFFF0000 for black on white, in every RGB format.
+- LINE_STRIDE: the bitmap bytes from a line to the next.
+  In row layout from a pixel row to the next (the tiles per row).
+  In vertical layout from a tile row to the next (8 × the tiles per row).
+  The tile map has as many tiles per row as the bitmap; its stride follows from LINE_STRIDE.
+- SIZE: width and height in pixels.
+  The RTL supports displays where pixel rows or columns are not a multiple of 8 (e.g.: ILI9225: 220 rows).
+  A last tile of fewer than 8 pixels is sent in part.
+  RGB444 requires the width to be an even number of pixels.
 
-The engine reads tile *c* of a line at FB_START + *c* (row layout) or
-FB_START + 8*c* (vertical layout), its map entry *c* nibbles after
-MAP_START, and steps FB_START and MAP_START to the next line, as a DMA
-channel steps its addresses. In the vertical layout it reads 2 words per
-tile and pixel row, and keeps bit *r* of each byte for pixel row *r*: more
-reads than the row layout (24.7 instead of 10.9 words per tile, random tile
-map), about 2 % of the memory bus for a 240×280 screen; the send is as
-fast.
+With the Verilog parameter CACHE = 0 the engine reads the map, bitmap and CLUT words for every tile.
+With CACHE = 1 (default) the engine reads them only when the next tile needs a different map, bitmap or CLUT word.
+With CACHE = 0 the engine reads every word and may underrun the SPI at high wait states.
+Use CACHE = 0 to tell a cache fault from a fault elsewhere.
 
-With the Verilog parameter CACHE = 0 the engine reads
-the map, bitmap and CLUT words for every tile. With CACHE = 1 (default) the
-engine reads them only when the next tile needs a different map, bitmap or
-CLUT word.
+The engine walks through the frame buffer and tile map, as a DMA channel steps its addresses.
+For memory with less than 32 wait states, and with the default CACHE = 1, speed is limited by the SPI frequency.
+
+In simulation:
+
+- vertical layout reads 24.7 words per tile
+- row layout reads 10.9 words per tile
+- vertical layout uses about 2% of memory bus cycles. 
+- simulation conditions: random tile map, `make measure`
 
 ## Software
 
 The same color expansion in software, without the DMA engine:
 
-- [u8g2, branch clut](https://github.com/koendv/u8g2/tree/clut): u8g2 with
-  color drivers for ST7789, ILI9341 and GC9A01 displays, for Arduino.
-  `u8x8_clut_stream_rgb565()` and `u8x8_clut_stream_rgb444()` in
-  `csrc/u8x8_clut.c` are the software version of the engine.
-- [micropython-u8g2](https://github.com/koendv/micropython-u8g2): u8g2
-  graphics and mui menus for MicroPython, with the same color drivers.
+- [u8g2, branch clut](https://github.com/koendv/u8g2/tree/clut): u8g2 with color drivers for ST7789, ILI9341 and GC9A01 displays, for Arduino.
+  `u8x8_clut_stream_rgb565()` and `u8x8_clut_stream_rgb444()` in `csrc/u8x8_clut.c` are the software version of the engine.
+- [micropython-u8g2](https://github.com/koendv/micropython-u8g2): u8g2 graphics and mui menus for MicroPython, with the same color drivers.
 
 ## Contents
 
-- `rtl/clut_dma.v`: Verilog model of the DMA engine, APB3 register port. Its
-  `ifdef FORMAL` block holds the formal properties.
+- `rtl/clut_dma.v`: Verilog model of the DMA engine, APB3 register port. Its `ifdef FORMAL` block holds the formal properties.
 - `tb/`: testbench. `ref.c` writes the memory and the requests, and the
   bytes u8g2 `u8x8_clut_stream_rgb565()` and `u8x8_clut_stream_rgb444()`
   send for them; `tb_clut_dma.v` compares the model with those bytes, and
@@ -271,8 +256,8 @@ Change an option with `make -B` or after `make clean`.
 
 Tang Nano 20K, Gowin Cortex-M1 at 54 MHz with 32 KiB ITCM and 32 KiB DTCM,
 clut_fabric on its APB (0x60000000) and AHB (0x80000000, 16 KiB fbmem).
-UART0 (0x50004000) goes to the USB serial of the board. The firmware is loaded
-into ITCM over SWD and started with a reset of the core (`openocd`, `m1.cfg`).
+UART0 (0x50004000) goes to the USB serial of the board.
+The firmware is loaded into ITCM over SWD and started with a reset of the core (`openocd`, `m1.cfg`).
 
 | signal | FPGA pin | header | display |
 |---|---|---|---|
@@ -288,17 +273,14 @@ into ITCM over SWD and started with a reset of the core (`openocd`, `m1.cfg`).
 | swdio | 74 | J6 2 | SWD probe |
 | mark | 16 | J6 7 | timing mark, high during a transfer |
 
-The display module plugs onto J6 pins 13 to 20, its GND on pin 20, and is
-powered from 3V3 on pin 19. Pins 17 to 20 also drive the onboard leds 2 to
-5.
+The display module plugs onto J6 pins 13 to 20, its GND on pin 20, and is powered from 3V3 on pin 19.
+Pins 17 to 20 also drive the onboard leds 2 to 5.
 
-If the display module has a 3.3 V LDO, it can be powered from 5 V: a wire
-from J5 pin 1 (+5V) to the VCC of the module, and the VCC of the module not
-on J6 pin 19 (3V3), or 5 V is shorted to the 3.3 V of the board. The logic
-stays at 3.3 V.
+If the display module has a 3.3 V LDO, it can be powered from 5 V. The logic stays at 3.3 V.
 
-Screen update of ClutClock, measured on the board: the whole clock drawn by
-u8g2 and the whole screen sent, 240×280 in RGB444, SPI at 27 MHz.
+## ClutClock demo
+
+Screen update of ClutClock, measured on the board: the whole clock drawn by u8g2 and the whole screen sent, 240×280 in RGB444, SPI at 27 MHz.
 
 | u8g2 buffer | RAM | draw and send |
 |---|---|---|
@@ -306,37 +288,40 @@ u8g2 and the whole screen sent, 240×280 in RGB444, SPI at 27 MHz.
 | 2 tile rows (`PAGE_ROWS=2`) | 1,781 bytes | 88 ms |
 | full screen | 9,701 bytes | 41 ms |
 
-RAM: the bitmap (240, 480 or 8,400 bytes), the tile map (525 bytes) and the
-CLUT (64 bytes), plus 712 bytes of variables and stack (the highest stack
-use measured). The code is in ITCM and not counted. Of each time, 29.9 ms is
-the send by clut_dma: 100,800 bytes, the SPI never waits. The rest is
-drawing; in page mode u8g2 draws the clock once per page. The current
-firmware waits for each transfer to end, so drawing and sending do not
-overlap.
+RAM: the bitmap (240, 480 or 8,400 bytes), the tile map (525 bytes) and the CLUT (64 bytes), plus 712 bytes of variables and stack (the highest stack
+use measured).
 
-Falling stars, measured on the board: 24 stars of 16×16 pixels drawn by
-Adafruit GFX, 240×280 in RGB444, SPI at 27 MHz. The demo changes mode every
-10 seconds.
+The code is in ITCM and not counted.
+
+In all three cases, sending the whole display over SPI takes 29.9 ms, the SPI never waits.
+The rest of the time is drawing; in page mode u8g2 draws the clock once per page.
+The current firmware waits for each transfer to end, so drawing and sending do not overlap.
+
+Conclusion: using less memory means lower speed.
+
+## Falling stars demo
+
+Falling stars, measured on the board: 24 stars of 16×16 pixels drawn by Adafruit GFX, 240×280 in RGB444, SPI at 27 MHz.
+The demo changes mode every 10 seconds, between updating individual stars or updating the whole screen.
 
 | sent per frame | frames per second | clut_dma | draw and send |
 |---|---|---|---|
 | per star: the tiles each star left and entered, 24 requests | 50 (the set rate) | 4.9 ms | 18.7 ms |
 | the whole screen, 1 request | 23 | 29.9 ms | 43.3 ms |
 
-Where two stars share an 8×8 tile, the tile has the color of one of them.
+Where two stars share the same 8×8 tile, the tile has the color of one of them.
+
+Conclusion: it is faster to update only the changed parts of the display.
 
 ## Defensive publication
 
-[clut-dma.md](clut-dma.md) ([PDF](clut-dma.pdf)): *Color expansion of a 1-bpp
-frame buffer with a per-tile color lookup table in an MCU DMA engine.* It
+[clut-dma.md](clut-dma.md) ([PDF](clut-dma.pdf)): *Color expansion of a 1-bpp frame buffer with a per-tile color lookup table in an MCU DMA engine.* It
 discloses the method and its variants so that they are prior art.
 
-Published on Zenodo, 2026-10-31:
-[doi:10.5281/zenodo.23835661](https://doi.org/10.5281/zenodo.23835661).
+Published on Zenodo, 2026-10-31: [doi:10.5281/zenodo.23835661](https://doi.org/10.5281/zenodo.23835661).
 
 ## License
 
-Text (`clut-dma.md`, `clut-dma.pdf`): CC BY 4.0. Code (Verilog model,
-testbenches, formal properties, firmware, scripts): BSD-2-Clause, see
-`LICENSE`. The Gowin Cortex-M1 soft core is IP of the FPGA vendor and is not
-included; only its configuration file `gowin_empu_m1.ipc` is.
+Text (`clut-dma.md`, `clut-dma.pdf`): CC BY 4.0. Code (Verilog model, testbenches, formal properties, firmware, scripts): BSD-2-Clause, see
+`LICENSE`.
+The Gowin Cortex-M1 soft core is IP of the FPGA vendor and is not included; only its configuration file `gowin_empu_m1.ipc` is.
