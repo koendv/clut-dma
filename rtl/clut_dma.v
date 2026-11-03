@@ -27,6 +27,9 @@
 //   MAP_START    the byte of the map that holds the entry of the top left
 //                tile
 //   MAP_NIBBLE   which nibble of that byte: 0 low, 1 high
+//                with CTRL NO_MAP the map is not read: every tile has clut
+//                entry 0, MAP_START and MAP_NIBBLE are not used. for a plain
+//                bitmap, the clut is the one word of entry 0, 64-byte aligned
 //   LINE_STRIDE  bitmap bytes from a line to the next: horizontal from a pixel
 //                row to the next (TILE_COLS), vertical from a tile row to the
 //                next (8 * TILE_COLS). the map steps LINE_STRIDE (horizontal)
@@ -78,6 +81,7 @@
 //                     bits 2:1 FORMAT (0 rgb565, 1 rgb444, 2 rgb666, 3 reserved),
 //                     bit 3 IRQ_EN,
 //                     bit 4 VERT, bitmap in vertical layout
+//                     bit 5 NO_MAP, no tile map: all tiles clut entry 0
 //   0x04 STATUS       bit 0 BUSY, bit 1 DONE (write 1 to clear)
 //   0x08 FB_START     bitmap address of the first tile; vertical: bits 2:0 ignored
 //   0x0C MAP_START    map byte of the entry of the first tile
@@ -141,6 +145,7 @@ module clut_dma #(
   reg [11:0] w, h;        // pixels; H counts the pixel rows left
   reg [1:0]  fmt;
   reg        vert;        // bitmap in the vertical tile layout of u8g2
+  reg        no_map;      // no tile map: all tiles clut entry 0
   reg        irq_en, busy, done;
 
   // fetch
@@ -206,12 +211,12 @@ module clut_dma #(
   wire [31:2] fb_rd    = fbp[31:2];
 
   // clut index of the tile, from the map word
-  wire [3:0]  tile_idx  = map_word[{ map_cur[2:0], 2'b00 } +: 4];
+  wire [3:0]  tile_idx  = no_map ? 4'd0 : map_word[{ map_cur[2:0], 2'b00 } +: 4];
 
   // reads for this tile: at the first tile of a line, at a word boundary,
   // when the clut index changes. without cache: always. vertical: the
   // bitmap words of every tile
-  wire        need_map = !CACHE || c == 9'd0 || map_cur[2:0] == 3'd0;
+  wire        need_map = !no_map && (!CACHE || c == 9'd0 || map_cur[2:0] == 3'd0);
   wire        need_fb  = !CACHE || vert || c == 9'd0 || fbp[1:0] == 2'd0;
   wire        need_clut = !CACHE || !clut_valid || tile_idx != idx;
 
@@ -298,7 +303,7 @@ module clut_dma #(
     if (!rst_n) begin
       fb_start <= 0; map_start <= 0; clut <= 0;
       line_stride <= 0; w <= 0; h <= 0;
-      fmt <= 0; vert <= 0; irq_en <= 0;
+      fmt <= 0; vert <= 0; no_map <= 0; irq_en <= 0;
       prdata <= 0;
       irq <= 0;
     end else begin
@@ -309,6 +314,7 @@ module clut_dma #(
                   fmt    <= pwdata[2:1];
                   irq_en <= pwdata[3];
                   vert   <= pwdata[4];
+                  no_map <= pwdata[5];
                 end
           3'd2: if (!busy) fb_start <= pwdata;
           3'd3: if (!busy) map_start[32:1] <= pwdata;
@@ -330,7 +336,7 @@ module clut_dma #(
         h <= h - 12'd1;
       if (apb_read) begin
         case (paddr[4:2])
-          3'd0:    prdata <= { 27'd0, vert, irq_en, fmt, 1'b0 };
+          3'd0:    prdata <= { 26'd0, no_map, vert, irq_en, fmt, 1'b0 };
           3'd1:    prdata <= { 30'd0, done, busy };
           3'd2:    prdata <= fb_start;
           3'd3:    prdata <= map_start[32:1];
@@ -575,6 +581,8 @@ module clut_dma #(
       assert(busy == (state != S_IDLE));
       assert(!(busy && done));
       assert(rd_req == (state == S_MAP || state == S_CLUT || state == S_FB));
+      // NO_MAP: no map reads
+      assert(!(no_map && state == S_MAP));
       // the tile in the line: at most the last one, W[11:3] - 1, or W[11:3]
       // with a partial last tile
       if (f_fetch) begin
@@ -645,12 +653,13 @@ module clut_dma #(
 
   // requests that complete
   reg [1:0]  f_fmt;
-  reg        f_vert;
+  reg        f_vert, f_nomap;
   reg [11:0] f_w, f_h;
   always @(posedge clk)
     if (start && !busy) begin
       f_fmt   <= pwdata[2:1];
       f_vert  <= pwdata[4];
+      f_nomap <= pwdata[5];
       f_w     <= w;
       f_h     <= h;
     end
@@ -661,6 +670,7 @@ module clut_dma #(
       cover(!f_vert && f_fmt == F_RGB444 && f_w == 10 && f_h == 2);
       cover(!f_vert && f_fmt == F_RGB666 && f_w == 3 && f_h == 1);
       cover(!f_vert && f_w == 1 && f_h == 9);    // two tile rows
+      cover(!f_vert && f_nomap && f_w == 9 && f_h == 2);   // no map, two tiles
 `else
       // vertical, the long covers (clut_dma.sby cover_vert): two tiles, two
       // tile rows

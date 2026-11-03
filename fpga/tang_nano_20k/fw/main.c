@@ -319,7 +319,7 @@ static uint32_t request(unsigned fmt, uint32_t fb, unsigned tx, unsigned ty, uns
   DMA_SIZE = (h << 16) | w;
   GPIO = GPIO_LED | GPIO_MARK;
   t0 = now();
-  DMA_CTRL = ((fmt & 3u) << 1) | ((fmt & FMT_VERT) ? 0x10u : 0u) | 1u;
+  DMA_CTRL = ((fmt & 3u) << 1) | ((fmt & FMT_VERT) ? 0x10u : 0u) | ((fmt & FMT_NOMAP) ? 0x20u : 0u) | 1u;
   while (!(DMA_STATUS & 2))
     ;
   t = now() - t0;

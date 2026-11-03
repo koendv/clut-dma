@@ -34,6 +34,8 @@ extern "C" {
 #define CLUT2_OFS 0x2380u          /* rgb565, fg and bg swapped */
 #define CLUT4_OFS 0x23C0u          /* rgb444 */
 #define CLUT3_OFS 0x2400u          /* rgb565, border test */
+#define MONO_OFS  0x2440u          /* NO_MAP: one word, white on black, any format */
+#define MONO2_OFS 0x2480u          /* NO_MAP: one word, black on white, any format */
 
 /* clut_dma FORMAT */
 #define FMT_RGB565 0u
@@ -42,6 +44,9 @@ extern "C" {
 /* clut_dma CTRL VERT, here in bit 2 of the format: the bitmap in the
    vertical tile layout of u8g2, FB_START the address of the first tile */
 #define FMT_VERT   4u
+/* clut_dma CTRL NO_MAP, here in bit 3 of the format: no tile map, every
+   tile clut entry 0 */
+#define FMT_NOMAP  8u
 
 /* the u8g2 demos: the vertical layout of u8g2, rgb444 */
 #define DEMO_FMT (FMT_RGB444 | FMT_VERT)

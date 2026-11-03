@@ -25,7 +25,9 @@
   u8g2, tile t is 8 bytes at fb + 8*t, byte c the pixel column c, bit r the
   pixel row r; fb 8-byte aligned. FB_START is the address of the first tile. the memory is given to
   u8x8_clut_stream_rgb565/444() as it is, without conversion. in tests.txt
-  and expected.txt, bit 2 of the format is the vertical layout. memory
+  and expected.txt, bit 2 of the format is the vertical layout, bit 3 NO_MAP
+  (clut_dma CTRL bit 5): no map, every tile clut entry 0, as u8g2 without a
+  tile_clut_map; no map reads, one clut read per request. memory
   reads: a map word and a clut word as for the horizontal layout, and 2
   bitmap words per tile and pixel row.
   "fabric": for fpga/tb/tb_fabric.v, a 240x280 display in the 16 kbyte memory
@@ -72,6 +74,7 @@ static FILE *expected;
 static FILE *reads;
 static uint32_t rnd_state = 1;
 static int fabric;      /* spi bytes with d/c */
+static int no_map;      /* requests with CTRL NO_MAP */
 
 /* output of u8x8_clut_stream_rgb565/444() for one run of tiles */
 static uint8_t cap[8 * 40 * 8 * 2];
@@ -142,7 +145,7 @@ static void request(int vert, int fmt, int tile_cols, int tx, int ty, int w, int
   uint8_t vt[8 * 40];
   int first = ty * tile_cols + tx;
   uint32_t fb_start = vert ? fb + 8 * first : fb + 8 * ty * tile_cols + tx;   /* the first tile */
-  int fmt_v = fmt | (vert << 2);
+  int fmt_v = fmt | (vert << 2) | (no_map << 3);
   int n = (w + 7) / 8;
   int i, c, r, k, p;
 
@@ -176,7 +179,7 @@ static void request(int vert, int fmt, int tile_cols, int tx, int ty, int w, int
     tab[i][1] = rd16(clut + 4 * i + 2);
   }
   u8x8.clut = tab;
-  u8x8.tile_clut_map = mem + map;
+  u8x8.tile_clut_map = no_map ? NULL : mem + map;
 
   /* memory reads of clut_dma, with the clut index kept over the request */
   {
@@ -187,9 +190,9 @@ static void request(int vert, int fmt, int tile_cols, int tx, int ty, int w, int
       {
         int tile = first + (y / 8) * tile_cols + c;
         uint32_t fbaddr = fb_start + y * tile_cols + c;
-        int idx = (mem[map + tile / 2] >> (4 * (tile & 1))) & 15;
+        int idx = no_map ? 0 : (mem[map + tile / 2] >> (4 * (tile & 1))) & 15;
 
-        if ( c == 0 || tile % 8 == 0 )
+        if ( !no_map && (c == 0 || tile % 8 == 0) )
           nreads++;
         if ( !valid || idx != last_idx )
           nreads++;
@@ -415,6 +418,14 @@ int main(int argc, char **argv)
     request(vert, fmt, 30, 0, 0, 40, 0, fb, MAP_A, CLUT_A);             /* empty: h = 0 */
     for ( i = 0; i < 20; i++ )
       random_request(vert, fmt);
+    /* NO_MAP: the map is not read; MAP_C would give index 0 and 15 */
+    no_map = 1;
+    request(vert, fmt, 30, 0, 0, 240, 240, fb, MAP_C, CLUT_A);          /* whole screen, 240x240 */
+    request(vert, fmt, 30, 4, 10, 72 + odd, 45, fb, MAP_C, CLUT_A);     /* rectangle, partial tiles */
+    request(vert, fmt, 30, 0, 0, 240, 16, FB_C, MAP_C, CLUT_B);         /* all foreground */
+    for ( i = 0; i < 5; i++ )
+      random_request(vert, fmt);
+    no_map = 0;
   }
 
   fclose(tests);

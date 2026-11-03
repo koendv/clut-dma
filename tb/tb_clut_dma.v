@@ -5,7 +5,8 @@
 // reads mem.hex (memory image) and tests.txt (one request per line:
 // format tile_cols first w h fb_start map clut, hex; w and h in pixels), writes the received
 // bytes to out.txt, in the format of expected.txt written by ref.c.
-// format bits 1:0 FORMAT, bit 2 the vertical layout (CTRL bit 4).
+// format bits 1:0 FORMAT, bit 2 the vertical layout (CTRL bit 4), bit 3 NO_MAP
+// (CTRL bit 5).
 //
 // parameter CACHE (iverilog -P tb_clut_dma.CACHE=0): the engine without
 // cache, 3 memory reads per tile and pixel row; vertical: 4.
@@ -223,7 +224,7 @@ module tb_clut_dma;
       req_started = 0;
       req_bytes = 0;
       req_reads = 0;
-      apb_wr(5'h00, { 27'd0, fmt[2], 1'b1, fmt[1:0], 1'b1 });   // VERT, IRQ_EN, FORMAT, START
+      apb_wr(5'h00, { 26'd0, fmt[3:2], 1'b1, fmt[1:0], 1'b1 });   // NO_MAP, VERT, IRQ_EN, FORMAT, START
 
       // wait for the interrupt. 64 pixels per tile, at most 3 bytes per pixel
       limit = w * h * (3 * (spi ? spi : 8) + 16) + 2000;   // at most 3 bytes per pixel
@@ -240,7 +241,7 @@ module tb_clut_dma;
       // pixel row; vertical: map, clut and 2 or 3 bitmap words
       if (reads != 0 && $fscanf(reads, "%d\n", exp_reads) == 1) begin
         if (!CACHE)
-          exp_reads = (fmt[2] ? 4 : 3) * ((w + 7) / 8) * h;
+          exp_reads = ((fmt[2] ? 4 : 3) - fmt[3]) * ((w + 7) / 8) * h;
         if (req_reads != exp_reads) begin
           $display("error: test %0d: %0d memory reads, expected %0d", t, req_reads, exp_reads);
           errors = errors + 1;

@@ -53,6 +53,10 @@ void pattern(volatile uint8_t *mem)
   volatile uint32_t *clut4 = (volatile uint32_t *)(mem + CLUT4_OFS);
   unsigned x, y, i;
 
+  /* NO_MAP: white is all ones and black all zeros in every format */
+  *(volatile uint32_t *)(mem + MONO_OFS)  = 0x0000FFFFu;
+  *(volatile uint32_t *)(mem + MONO2_OFS) = 0xFFFF0000u;
+
   clear(mem);
   for (y = 0; y < LCD_H; y++)
     for (x = 0; x < LCD_W; x++) {
@@ -939,6 +943,19 @@ const struct step pattern_steps[] = {
   { STEP_REQ,    FMT_RGB565, 5, 10, 101, 50, CLUT2_OFS, "dma 101x50 at tile 5,10" },
   { STEP_REQ,    FMT_RGB565, 20, 1, 8, 200, CLUT2_OFS, "dma 8x200 at tile 20,1" },
   { STEP_REQ,    FMT_RGB565, 3, 30, 5, 3, CLUT2_OFS, "dma 5x3 at tile 3,30" },
+  { STEP_DELAY,  0, 0, 0, 2000, 0, 0, 0 },
+  /* NO_MAP: the same bitmap without the tile map, one clut word, the same
+     word in each format */
+  { STEP_REQ,    FMT_RGB565 | FMT_NOMAP, 0, 0, LCD_W, LCD_H, MONO_OFS, "dma no map rgb565 white on black" },
+  { STEP_DELAY,  0, 0, 0, 2000, 0, 0, 0 },
+  { STEP_COLMOD, 0x03, 0, 0, 0, 0, 0, 0 },
+  { STEP_REQ,    FMT_RGB444 | FMT_NOMAP, 0, 0, LCD_W, LCD_H, MONO2_OFS, "dma no map rgb444 black on white" },
+  { STEP_DELAY,  0, 0, 0, 2000, 0, 0, 0 },
+  { STEP_COLMOD, 0x06, 0, 0, 0, 0, 0, 0 },
+  { STEP_REQ,    FMT_RGB666 | FMT_NOMAP, 0, 0, LCD_W, LCD_H, MONO_OFS, "dma no map rgb666 white on black" },
+  { STEP_DELAY,  0, 0, 0, 2000, 0, 0, 0 },
+  { STEP_COLMOD, 0x05, 0, 0, 0, 0, 0, 0 },
+  { STEP_REQ,    FMT_RGB565 | FMT_NOMAP, 5, 10, 101, 50, MONO2_OFS, "dma no map 101x50 at tile 5,10" },
   { STEP_END,    0, 0, 0, 0, 0, 0, 0 }
 };
 

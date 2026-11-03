@@ -534,6 +534,17 @@ encoding.
     stride for the map, a register for the distance from a tile to the next,
     and the tile pointer of the library used without conversion in any
     other layout of fixed-size tiles.
+20. No tile map. A bit in the control register (NO_MAP) makes every tile
+    use CLUT entry 0; the engine reads no map, and MAP_START is not used.
+    A plain 1-bit bitmap, from a library without color per tile, is sent
+    with one color pair, without the map in memory: 525 bytes for a 240×280
+    display, most of the memory in a page buffer of one tile row. The CLUT
+    is then a single word; with white as all ones and black as all zeros,
+    0x0000FFFF is white on black and 0xFFFF0000 black on white in RGB565,
+    RGB444 and RGB666 alike. As a graphics library without a tile map
+    uses entry 0 for every tile (u8g2), the driver sets NO_MAP when the
+    library has no map. Also a bit that makes the engine use fixed colors
+    without reading the CLUT, white on black or black on white.
 
 ## 7. Reference implementation
 

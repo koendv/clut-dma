@@ -9,8 +9,9 @@
 //              w x0 x1 y0 y1   display window: CASET, RASET, RAMWR
 //              m word value    fbmem write, directly into the block ram
 //              f               end of a frame: an "f" line in spi.txt
-//              r fmt fb_start map clut line_offset first size
-//                              clut_dma request, streamed through spi_lcd
+//              r fmt fb_start map clut line_stride map_nibble size
+//                              clut_dma request, streamed through spi_lcd;
+//                              fmt bits 1:0 FORMAT, bit 2 VERT, bit 3 NO_MAP
 // as the firmware does it, with the spi at clk / 2.
 // Writes spi.txt, "c xx" or "d xx" per byte, for fpga/tb/st7789.py.
 
@@ -180,7 +181,7 @@ module tb_frame;
           apb_wr(12'h014, a4);              // LINE_STRIDE
           apb_wr(12'h018, a5);              // MAP_NIBBLE
           apb_wr(12'h01C, a6);              // SIZE
-          apb_wr(12'h000, { 27'd0, a0[2], 1'b0, a0[1:0], 1'b1 });   // VERT, FORMAT, START
+          apb_wr(12'h000, { 26'd0, a0[3:2], 1'b0, a0[1:0], 1'b1 });   // NO_MAP, VERT, FORMAT, START
           s = 0;
           while (!s[1])
             apb_rd(12'h004, s);

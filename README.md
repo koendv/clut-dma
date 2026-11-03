@@ -10,12 +10,20 @@ buffer and fits in about 10 kB of RAM; a 16-bit color frame buffer for the
 same 240×280 display would take 134 kB. The CPU draws in black and white; the
 DMA engine adds the color while it sends the image to the display.
 
-For the 240×280 display the bitmap, tile map and CLUT take 8,989 bytes; with
-a page buffer of one tile row (8 pixel rows), 829 bytes. Because the engine,
-not the CPU, does the color expansion, the CPU is free while the image is
-sent. With two bitmaps, the CPU draws the next frame while the engine sends
-the current one. With two page buffers of one tile row, the CPU draws a tile
-row while the engine sends the previous one, in 1,069 bytes.
+Memory for the 240×280 display of the prototype: in color the bitmap, tile
+map and CLUT; monochrome (NO_MAP), one color pair for all tiles, the bitmap
+and one CLUT word.
+
+| buffer | color | monochrome |
+|---|---|---|
+| full screen | 8,989 bytes | 8,404 bytes |
+| page buffer, 1 tile row (8 pixel rows) | 829 bytes | 244 bytes |
+| two page buffers, 1 tile row each | 1,069 bytes | 484 bytes |
+
+Because the engine, not the CPU, does the color expansion, the CPU is free
+while the image is sent. With two bitmaps, the CPU draws the next frame
+while the engine sends the current one. With two page buffers of one tile
+row, the CPU draws a tile row while the engine sends the previous one.
 
 ## Why
 
@@ -29,10 +37,45 @@ OLED and u8g2. That works well, but the OLED is single-source.
 I want a display that is low-cost, easily sourced, uses little RAM, and
 does not use the CPU when the image does not change.
 
-The color drivers of the u8g2 branch `clut` let u8g2 drive the color
+The color drivers of the u8g2 branch [clut](https://github.com/koendv/u8g2) let u8g2 drive the color
 displays that every supplier sells. clut_dma does the same in hardware: a
 low-cost MCU can drive a color display, and a larger MCU keeps its RAM and
 its CPU time for the application, not for the graphics.
+
+## Example: a soldering station
+
+A soldering station or a wall thermostat often has a 128×64 monochrome
+OLED. With 16×16 Chinese characters that is 4 lines of 8 characters:
+enough for 温度 and a number, but menu labels and error texts become
+characters the user has to guess. A 240×240 smartwatch panel (ST7789) is
+a commodity part and has room for 10 lines of 10 characters of 24×24
+pixels. The same holds for other scripts that need more pixels per
+character than Latin: Japanese, Korean, Arabic, Devanagari.
+
+What keeps the product on the small OLED is the RAM: a 16-bit frame buffer
+for 240×240 is 115,200 bytes, more than an M0-class MCU with 8 to 32 kB
+has. A 1-bit bitmap with a tile map and a CLUT fits: a page buffer in any
+of them, the full screen from about 16 kB.
+
+| buffer, 240×240 | color | monochrome |
+|---|---|---|
+| full screen | 7,714 bytes | 7,204 bytes |
+| page buffer, 1 tile row | 754 bytes | 244 bytes |
+
+Legible characters alone need only the monochrome column: 244 bytes, which
+fits in the RAM the product already spends on its OLED (1,024 bytes for a
+full 128×64 buffer). Color per character costs 510 bytes more: a 24×24
+character on a 24-pixel grid is 3×3 tiles, so each character can have its
+own colors.
+
+Today this works in software, with the color drivers of the u8g2 branch
+`clut` on the MCU the product already has; the CPU expands the colors
+while it sends. Perhaps a future MCU will have clut_dma (today a
+prototype on an FPGA); then the engine does that, and the CPU is free
+while the image is sent.
+
+The fonts take flash: 72 bytes per character, about 22 kB for the 300
+characters of a menu.
 
 ## Description
 
@@ -60,7 +103,10 @@ request. The CPU writes:
   left tile, 8-byte aligned; for u8g2 the tile pointer it passes to the
   display driver, also in a page buffer.
 - MAP_START and MAP_NIBBLE: the byte of the tile map with the entry of the
-  first tile, and which nibble (0 low, 1 high).
+  first tile, and which nibble (0 low, 1 high). With CTRL bit 5 (NO_MAP)
+  there is no tile map: every tile has CLUT entry 0, and the engine reads no
+  map. For a plain bitmap the CLUT is then one word, 64-byte aligned:
+  0x0000FFFF white on black, 0xFFFF0000 black on white, in every format.
 - LINE_STRIDE: the bitmap bytes from a line to the next: row layout from a
   pixel row to the next (the tiles per row), vertical layout from a tile row
   to the next (8 × the tiles per row). The tile map has as many tiles per
