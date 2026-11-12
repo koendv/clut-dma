@@ -74,6 +74,34 @@
 // and the bits it needs.
 // The same output, more reads; to tell a fault in the cache logic from one
 // elsewhere.
+//
+// Parameter BPP2 = 1: also 2 bits per pixel (CTRL BPP2), for anti-aliasing,
+// horizontal layout only (with VERT, BPP2 is ignored and reads 0).
+//   bitmap  a byte is 4 pixels of a pixel row, the leftmost in bits 7:6. a
+//           tile is 2 bytes of a pixel row, a bitmap word 2 tiles. FB_START
+//           bit 0 is ignored. LINE_STRIDE: 2 * TILE_COLS; the map steps
+//           LINE_STRIDE / 2 entries per tile row.
+//   pixel   a code c of 2 bits selects one of the 4 colors of its clut
+//           entry: word c >> 1 of the entry, bits 15:0 when c is odd, bits
+//           31:16 when c is even. The software that fills the clut decides
+//           what the 4 colors are; e.g. c the coverage, 0 background, 1 and
+//           2 a third and two thirds of the way, 3 foreground.
+//   CLUT    16 entries of 64 bits, 128-byte aligned (bit 6 ignored), entry
+//           at CLUT + 8 * idx: word 0 the colors of codes 1 (bits 15:0) and
+//           0 (bits 31:16), the same word as the 1-bit clut word with its
+//           foreground and background; word 1 the colors of codes 3 (bits
+//           15:0) and 2 (bits 31:16). the word address {CLUT[31:7], idx,
+//           high bit of the code, 00}, no adder; the low bit selects the
+//           halfword.
+//   reads   2 clut words when the index changes (CACHE = 0: every tile).
+//   inside  the pixels of a tile as two planes of 8 bits: the low bits in the
+//           shift register of the 1-bit engine, with its sentinel, and the
+//           high bits in a second shift register beside it.
+// BPP2 = 0 (default): the 1-bit engine only; CTRL BPP2 reads 0.
+//
+// Parameter VERT = 0: no vertical layout; CTRL VERT is ignored and reads 0.
+// For graphics libraries that draw in the horizontal layout (LVGL, Adafruit
+// GFX), not u8g2. VERT = 1 (default): both layouts.
 // A 2-byte skid buffer between output and peripheral.
 // DONE is set when the last byte has left the buffer.
 // Bus error: a read with rd_err. The engine makes no more reads; the bytes
@@ -94,6 +122,7 @@
 //                     bit 3 IRQ_EN,
 //                     bit 4 VERT, bitmap in vertical layout
 //                     bit 5 NO_MAP, no tile map: all tiles clut entry 0
+//                     bit 6 BPP2, 2 bits per pixel (parameter BPP2 = 1)
 //   0x04 STATUS       bit 0 BUSY, bit 1 DONE (write 1 to clear),
 //                     bit 2 ERR, bus error (write 1 to clear)
 //   0x08 FB_START     bitmap address of the first tile; vertical: bits 2:0 ignored
@@ -106,7 +135,9 @@
 // All outputs come from flip-flops.
 
 module clut_dma #(
-  parameter CACHE = 1             // keep the last map, bitmap and clut word
+  parameter CACHE = 1,            // keep the last map, bitmap and clut word
+  parameter BPP2  = 0,            // also 2 bits per pixel, horizontal layout
+  parameter VERT  = 1             // the vertical layout of u8g2
 ) (
   input             clk,
   input             rst_n,
@@ -144,6 +175,7 @@ module clut_dma #(
   localparam S_NEXT  = 4'd7;
   localparam S_DRAIN = 4'd8;
   localparam S_PUT   = 4'd9;
+  localparam S_CLUT1 = 4'd10;   // 2 bpp: word 1 of the clut entry
 
   localparam F_RGB565 = 2'd0;
   localparam F_RGB444 = 2'd1;
@@ -158,6 +190,7 @@ module clut_dma #(
   reg [1:0]  fmt;
   reg        vert;        // bitmap in the vertical tile layout of u8g2
   reg        no_map;      // no tile map: all tiles clut entry 0
+  reg        bpp2;        // 2 bits per pixel, horizontal layout
   reg        irq_en, busy, done, err;
 
   // fetch
@@ -175,11 +208,15 @@ module clut_dma #(
   // handoff register, from fetch to output
   reg [8:0]  h_sh;    // pixels, leftmost in bit 0, sentinel above the last pixel
   reg [15:0] h_fg, h_bg;
+  reg [7:0]  h_hi;    // 2 bpp: the high bits of the pixels, leftmost in bit 0
+  reg [15:0] h_f1, h_b1;  // 2 bpp: word 1 of the clut entry, bits 15:0 and 31:16
   reg        h_valid;
 
   // output
   reg [15:0] fg, bg;
+  reg [15:0] f1, b1;  // 2 bpp: word 1, the colors of codes 3 and 2
   reg [8:0]  sh;      // pixels, leftmost in bit 0, sentinel above. empty: 9'd1
+  reg [7:0]  sh_hi;   // 2 bpp: the high bits, in step with sh
   reg [2:0]  bsel;    // byte of the pixel (pair), one-hot
 
   // skid buffer: byte_data/byte_valid is the head, skid_data/skid_valid the second byte
@@ -205,10 +242,14 @@ module clut_dma #(
   wire        row_end  = step && line_done && !req_end;   // end of a pixel row
   wire        grp_end  = row_end && row == 3'd7;           // end of a tile row
   wire        fb_line  = vert ? grp_end : row_end;
-  wire [31:0] fb_a     = { fb_start[31:3], vert ? 3'b000 : fb_start[2:0] };   // vertical: 8-byte aligned
+  // vertical: 8-byte aligned. 2 bpp: 2-byte aligned, a tile of 2 bytes
+  wire [31:0] fb_a     = { fb_start[31:3], vert ? 3'b000 : { fb_start[2:1], fb_start[0] & !bpp2 } };
   wire [31:0] fb_sum   = fb_a + (step ? { 16'd0, line_stride }
-                                      : vert ? { 20'd0, c, 3'b000 } : { 23'd0, c });
-  wire [32:0] map_sum  = map_start + (step ? (vert ? { 20'd0, line_stride[15:3] } : { 17'd0, line_stride })
+                                      : vert ? { 20'd0, c, 3'b000 }
+                                      : bpp2 ? { 22'd0, c, 1'b0 } : { 23'd0, c });
+  wire [32:0] map_sum  = map_start + (step ? (vert ? { 20'd0, line_stride[15:3] }
+                                              : bpp2 ? { 18'd0, line_stride[15:1] }
+                                              : { 17'd0, line_stride })
                                            : { 24'd0, c });
   wire [31:0] fbp      = fb_sum;
   wire [32:0] map_cur  = map_sum;
@@ -227,6 +268,13 @@ module clut_dma #(
   // without cache: the clut index and the bitmap byte straight from the read
   wire [3:0]  rd_idx   = rd_data[{ map_cur[2:0], 2'b00 } +: 4];
   wire [7:0]  rd_byte  = rd_data[{ fbp[1:0], 3'b000 } +: 8];
+  wire [15:0] rd_half  = rd_data[{ fbp[1], 4'b0000 } +: 16];   // 2 bpp
+
+  // address of the clut word of index i: word 0 of the entry. 2 bpp: 8
+  // bytes per entry, word 1 is this address with bit 2 set
+  function [31:0] clut_w0(input [3:0] i);
+    clut_w0 = bpp2 ? { clut[31:7], i, 3'b000 } : { clut, i, 2'b00 };
+  endfunction
 
   // bitmap byte of the tile, from the bitmap word. leftmost pixel in bit 7,
   // reversed: leftmost in bit 0
@@ -239,19 +287,31 @@ module clut_dma #(
   // column 0) in bit 0
   wire [3:0]  rd_nib   = { rd_data[{ 2'd3, row }], rd_data[{ 2'd2, row }],
                            rd_data[{ 2'd1, row }], rd_data[{ 2'd0, row }] };
-  wire [7:0]  px       = vert ? vacc : hpx;
+  // 2 bpp: the 2 bytes of the tile, pixel p in bits 7-2p:6-2p of byte p/4,
+  // split in planes: low bits and high bits, leftmost pixel in bit 0
+  wire [15:0] fb_half  = CACHE ? fb_word[{ fbp[1], 4'b0000 } +: 16] : fb_word[15:0];
+  wire [7:0]  lo2      = { fb_half[8], fb_half[10], fb_half[12], fb_half[14],
+                           fb_half[0], fb_half[2],  fb_half[4],  fb_half[6] };
+  wire [7:0]  hi2      = { fb_half[9], fb_half[11], fb_half[13], fb_half[15],
+                           fb_half[1], fb_half[3],  fb_half[5],  fb_half[7] };
+
+  wire [7:0]  px       = vert ? vacc : bpp2 ? lo2 : hpx;
 
   // pixels of the tile and the sentinel above the last one
   wire [3:0]  npx     = (part_w && last_tile) ? { 1'b0, w[2:0] } : 4'd8;
   wire [8:0]  px_mask = (9'd1 << npx) - 9'd1;
   wire [8:0]  px_sh   = ({ 1'b0, px } & px_mask) | (9'd1 << npx);
+  wire [7:0]  px_hi   = bpp2 ? hi2 & px_mask[7:0] : 8'd0;
 
-  // fg/bg select
-  wire [15:0] pix0 = sh[0] ? fg : bg;
-  wire [11:0] pix1 = sh[1] ? fg[11:0] : bg[11:0];   // rgb444 only
+  // color select: the low bit the halfword (fg: bits 15:0, bg: 31:16), the
+  // high bit word 1 of the clut entry (2 bpp)
+  wire [15:0] pix0 = sh_hi[0] ? (sh[0] ? f1 : b1) : (sh[0] ? fg : bg);
+  wire [11:0] pix1 = sh_hi[1] ? (sh[1] ? f1[11:0] : b1[11:0])
+                              : (sh[1] ? fg[11:0] : bg[11:0]);   // rgb444 only
 
-  // shift register after this pixel (pair)
-  wire [8:0] sh_next = (fmt == F_RGB444) ? (sh >> 2) : (sh >> 1);
+  // shift registers after this pixel (pair)
+  wire [8:0] sh_next    = (fmt == F_RGB444) ? (sh >> 2) : (sh >> 1);
+  wire [7:0] sh_hi_next = (fmt == F_RGB444) ? (sh_hi >> 2) : (sh_hi >> 1);
 
   // bytes of the pixel (pair)
   reg [23:0] bytes;
@@ -310,7 +370,7 @@ module clut_dma #(
     if (!rst_n) begin
       fb_start <= 0; map_start <= 0; clut <= 0;
       line_stride <= 0; w <= 0; h <= 0;
-      fmt <= 0; vert <= 0; no_map <= 0; irq_en <= 0;
+      fmt <= 0; vert <= 0; no_map <= 0; bpp2 <= 0; irq_en <= 0;
       reg_rdata <= 0;
       irq <= 0;
     end else begin
@@ -320,8 +380,9 @@ module clut_dma #(
           3'd0: if (!busy) begin
                   fmt    <= reg_wdata[2:1];
                   irq_en <= reg_wdata[3];
-                  vert   <= reg_wdata[4];
+                  vert   <= VERT != 0 && reg_wdata[4];
                   no_map <= reg_wdata[5];
+                  bpp2   <= BPP2 != 0 && reg_wdata[6] && !(VERT != 0 && reg_wdata[4]);
                 end
           3'd2: if (!busy) fb_start <= reg_wdata;
           3'd3: if (!busy) map_start[32:1] <= reg_wdata;
@@ -343,7 +404,7 @@ module clut_dma #(
         h <= h - 12'd1;
       if (reg_rd) begin
         case (reg_addr)
-          3'd0:    reg_rdata <= { 26'd0, no_map, vert, irq_en, fmt, 1'b0 };
+          3'd0:    reg_rdata <= { 25'd0, bpp2, no_map, vert, irq_en, fmt, 1'b0 };
           3'd1:    reg_rdata <= { 29'd0, err, done, busy };
           3'd2:    reg_rdata <= fb_start;
           3'd3:    reg_rdata <= map_start[32:1];
@@ -371,18 +432,23 @@ module clut_dma #(
   // skid buffer has room. after the last byte of a pixel (pair): shift.
   always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      fg <= 0; bg <= 0; sh <= 9'd1; bsel <= 3'b001;
+      fg <= 0; bg <= 0; f1 <= 0; b1 <= 0;
+      sh <= 9'd1; sh_hi <= 0; bsel <= 3'b001;
     end else if (take) begin
-      fg   <= h_fg;
-      bg   <= h_bg;
-      sh   <= h_sh;
-      bsel <= 3'b001;
+      fg    <= h_fg;
+      bg    <= h_bg;
+      f1    <= h_f1;
+      b1    <= h_b1;
+      sh    <= h_sh;
+      sh_hi <= h_hi;
+      bsel  <= 3'b001;
     end else if (push) begin
       if (!last)
         bsel <= bsel << 1;
       else begin
-        bsel <= 3'b001;
-        sh   <= sh_next;
+        bsel  <= 3'b001;
+        sh    <= sh_next;
+        sh_hi <= sh_hi_next;
       end
     end
   end
@@ -397,6 +463,7 @@ module clut_dma #(
       map_word <= 0; fb_word <= 0; idx <= 0; clut_valid <= 0;
       wcnt <= 0; vacc <= 0;
       h_sh <= 0; h_fg <= 0; h_bg <= 0;
+      h_hi <= 0; h_f1 <= 0; h_b1 <= 0;
     end else begin
 
       if (reg_wr && reg_addr == 3'd1 && reg_wdata[1])
@@ -427,7 +494,7 @@ module clut_dma #(
             end else if (need_clut) begin
               idx     <= tile_idx;
               rd_req  <= 1;
-              rd_addr <= { clut, tile_idx, 2'b00 };
+              rd_addr <= clut_w0(tile_idx);
               state   <= S_CLUT;
             end else if (need_fb) begin
               rd_req  <= 1;
@@ -444,7 +511,7 @@ module clut_dma #(
               rd_req   <= 0;
               state    <= S_IDX;
             end else begin
-              rd_addr  <= { clut, rd_idx, 2'b00 };
+              rd_addr  <= clut_w0(rd_idx);
               state    <= S_CLUT;
             end
           end
@@ -454,7 +521,7 @@ module clut_dma #(
           if (need_clut) begin
             idx     <= tile_idx;
             rd_req  <= 1;
-            rd_addr <= { clut, tile_idx, 2'b00 };
+            rd_addr <= clut_w0(tile_idx);
             state   <= S_CLUT;
           end else if (need_fb) begin
             rd_req  <= 1;
@@ -463,11 +530,28 @@ module clut_dma #(
           end else
             state <= S_PUT;
 
+        // word 0 of the clut entry. 2 bpp: then word 1, the next word
         S_CLUT:
           if (rd_ack) begin
             h_fg       <= rd_data[15:0];
             h_bg       <= rd_data[31:16];
             clut_valid <= 1;
+            if (bpp2) begin
+              rd_addr <= { rd_addr[31:3], 1'b1, 2'b00 };
+              state   <= S_CLUT1;
+            end else if (need_fb) begin
+              rd_addr <= { fb_rd[31:2], 2'b00 };
+              state   <= S_FB;
+            end else begin
+              rd_req  <= 0;
+              state   <= S_PUT;
+            end
+          end
+
+        S_CLUT1:
+          if (rd_ack) begin
+            h_f1 <= rd_data[15:0];
+            h_b1 <= rd_data[31:16];
             if (need_fb) begin
               rd_addr <= { fb_rd[31:2], 2'b00 };
               state   <= S_FB;
@@ -491,7 +575,7 @@ module clut_dma #(
                 rd_addr <= { rd_addr[31:3], 1'b1, 2'b00 };
               end
             end else begin
-              fb_word <= CACHE ? rd_data : { 24'd0, rd_byte };
+              fb_word <= CACHE ? rd_data : bpp2 ? { 16'd0, rd_half } : { 24'd0, rd_byte };
               rd_req  <= 0;
               state   <= S_PUT;
             end
@@ -501,6 +585,7 @@ module clut_dma #(
         S_PUT:
           begin
             h_sh  <= px_sh;
+            h_hi  <= px_hi;
             state <= S_NEXT;
           end
 
@@ -599,8 +684,8 @@ module clut_dma #(
 
   // fetch: legal states, busy outside S_IDLE, a read in the read states
   wire f_fetch = state == S_WAIT || state == S_MAP || state == S_CLUT ||
-                 state == S_FB || state == S_IDX || state == S_PUT ||
-                 state == S_NEXT;
+                 state == S_CLUT1 || state == S_FB || state == S_IDX ||
+                 state == S_PUT || state == S_NEXT;
   always @(*)
     if (rst_n) begin
       assert(f_fetch || state == S_IDLE || state == S_DRAIN || state == S_ABORT);
@@ -608,9 +693,22 @@ module clut_dma #(
       assert(!(busy && done));
       assert(!(busy && err));
       assert(!(done && err));
-      assert(rd_req == (state == S_MAP || state == S_CLUT || state == S_FB));
+      assert(rd_req == (state == S_MAP || state == S_CLUT || state == S_CLUT1 ||
+                        state == S_FB));
       // NO_MAP: no map reads
       assert(!(no_map && state == S_MAP));
+      // 2 bpp: only with the parameter, not with the vertical layout; word 1
+      // of the clut entry only in 2 bpp
+      assert(BPP2 || !bpp2);
+      assert(VERT || !vert);
+      assert(!(bpp2 && vert));
+      assert(bpp2 || state != S_CLUT1);
+      // clut reads inside the table: 2 bpp word 0 then word 1 of the entry
+      if (state == S_CLUT)
+        assert(bpp2 ? rd_addr[31:7] == clut[31:7] && !rd_addr[2]
+                    : rd_addr[31:6] == clut);
+      if (state == S_CLUT1)
+        assert(rd_addr[31:7] == clut[31:7] && rd_addr[2]);
       // the tile in the line: at most the last one, W[11:3] - 1, or W[11:3]
       // with a partial last tile
       if (f_fetch) begin
@@ -659,6 +757,29 @@ module clut_dma #(
         assert(byte_valid);
     end
 
+  // 2 bpp: the high bits only below the sentinel, so they leave with the low
+  // bits; in 1 bpp none
+  function [8:0] f_below(input [8:0] v);
+    integer i;
+    begin
+      f_below = 0;
+      for (i = 0; i < 9; i = i + 1)
+        if (v[i])
+          f_below = (9'd1 << i) - 9'd1;
+    end
+  endfunction
+  always @(*)
+    if (rst_n) begin
+      assert(({ 1'b0, sh_hi } & ~f_below(sh)) == 0);
+      if (h_valid)
+        assert(({ 1'b0, h_hi } & ~f_below(h_sh)) == 0);
+      if (!bpp2) begin
+        assert(sh_hi == 0);
+        if (h_valid)
+          assert(h_hi == 0);
+      end
+    end
+
   // the handoff register waits with an empty output only in the cycle after
   // it was put: the output takes it at once. so in S_DRAIN an empty output
   // means an empty handoff register, and DONE needs no !h_valid
@@ -681,13 +802,14 @@ module clut_dma #(
 
   // requests that complete
   reg [1:0]  f_fmt;
-  reg        f_vert, f_nomap;
+  reg        f_vert, f_nomap, f_bpp2;
   reg [11:0] f_w, f_h;
   always @(posedge clk)
     if (start && !busy) begin
       f_fmt   <= reg_wdata[2:1];
-      f_vert  <= reg_wdata[4];
+      f_vert  <= VERT != 0 && reg_wdata[4];
       f_nomap <= reg_wdata[5];
+      f_bpp2  <= BPP2 != 0 && reg_wdata[6] && !(VERT != 0 && reg_wdata[4]);
       f_w     <= w;
       f_h     <= h;
     end
@@ -699,6 +821,14 @@ module clut_dma #(
       cover(!f_vert && f_fmt == F_RGB666 && f_w == 3 && f_h == 1);
       cover(!f_vert && f_w == 1 && f_h == 9);    // two tile rows
       cover(!f_vert && f_nomap && f_w == 9 && f_h == 2);   // no map, two tiles
+`ifdef BPP2_COVER
+      // 2 bpp (clut_dma.sby with BPP2 = 1): two tiles, two clut entries
+      cover(f_bpp2 && f_fmt == F_RGB565 && f_w == 9 && f_h == 2);
+      cover(f_bpp2 && f_fmt == F_RGB444 && f_w == 10 && f_h == 2);
+      cover(f_bpp2 && f_fmt == F_RGB666 && f_w == 3 && f_h == 1);
+      cover(f_bpp2 && f_w == 1 && f_h == 9);    // two tile rows
+      cover(f_bpp2 && f_nomap && f_w == 9 && f_h == 1);
+`endif
 `else
       // vertical, the long covers (clut_dma.sby cover_vert): two tiles, two
       // tile rows

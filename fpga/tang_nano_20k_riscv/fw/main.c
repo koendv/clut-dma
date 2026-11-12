@@ -715,11 +715,11 @@ int main(void)
 
 #ifdef ASYNC_TEST
   {
-    /* the auto gauge: the whole screen in one clut_dma request, the cpu
+    /* the speed gauge: the whole screen in one clut_dma request, the cpu
        asleep while it is sent; every 2 s FPS and CPU %, as on the display */
     uint32_t report = now(), fps10, cpu10;
 
-    puts_("\nauto gauge: the whole screen in one clut_dma request, interrupt driven, "
+    puts_("\nspeed gauge: the whole screen in one clut_dma request, interrupt driven, "
           "the cpu sleeps while it is sent\n");
     lcd_init();
     lcd_cmd1(0x36, ASYNC_MADCTL);  /* MADCTL: landscape 280x240 */

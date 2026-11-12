@@ -1,7 +1,7 @@
 # clut_dma on a Cortex-M1
 
 The ARM build of the prototype: [`rtl/clut_dma.v`](../../rtl/clut_dma.v) with a Gowin Cortex-M1 soft core on a Tang Nano 20K, driving a WeAct ST7789 240×280 display.
-This is the build in the video of the [main page](../../README.md).
+The speed gauge video on the [main page](../../README.md) shows this build.
 For the engine itself, see [rtl/README.md](../../rtl/README.md).
 
 ## Hardware
@@ -84,13 +84,20 @@ make clutclock     # u8g2 ClutClock, an analog clock
 make graphics      # u8g2 demo_graphics, the GraphicsTest pages
 make mui           # u8g2 demo_mui, a menu; keys over the uart
 make stars         # Adafruit GFX falling stars, 1 bpp, row layout
-make async         # an auto gauge, one request per screen, interrupt driven
+make solder        # soldering station, 24×24 Chinese, see below
+make async         # a speed gauge, one request per screen, interrupt driven, see below
+make mui2bpp       # mui_2bpp: a menu at 2 bits per pixel, anti-aliased, English
+                   # and Chinese; keys over the uart, see below
 make demo          # the examples one after the other, then a walk through the
                    # menu with keys over the uart; waits for enter, for a video
+make demo-solder   # the soldering station with keys over the uart, for a video
+make demo-menu     # the anti-aliased menu with keys over the uart, for a video
 make term          # serial terminal on UART0, /dev/ttyUSB1, 115200 baud
 make sim TEST=...  # the image the display ought to show, from a simulation of
                    # the rtl: border, palette, clutcolor, clutclock, graphics,
                    # mui, stars, solder
+make sim-mui2bpp   # mui_2bpp through the rtl twice, the cpu expanding the
+                   # colors and clut_dma; the bytes to the display the same
 ```
 
 The firmware: test images, and the color examples of the u8g2 branch `clut`
@@ -185,7 +192,9 @@ A soldering station in 24×24 Chinese (`fw/solder.c`): a home screen with the ti
 The layout follows [OpenT12](https://github.com/createskyblue/OpenT12); no code or images of it are used.
 The soldering iron is simulated: the heater warms the tip, the tip loses heat to the room, a controller holds the set temperature.
 
-![black and white](../../fig/solder-bw.png) ![color](../../fig/solder-color.png)
+| black and white | color |
+|---|---|
+| ![black and white](../../fig/solder-bw.png) | ![color](../../fig/solder-color.png) |
 
 The same frame in black and white and in color, from `make sim TEST=solder`: the bitmap is the same, only the CLUT and the tile map differ.
 
@@ -232,18 +241,20 @@ CPU time for sending: the time per frame the CPU spends sending the picture, eve
 | full screen | 8,408 / 8,992 bytes | 57.9 / 58.0 ms | 32.2 ms |
 
 - Color costs RAM, not time: with clut_dma, black and white and color take the same time. The CPU draws in black and white either way, and clut_dma reads the map and CLUT words beside the bitmap; the SPI stays the limit.
-- Sending a whole screen takes 32.2 ms: 29.8 ms of pixels (240×280 in RGB444 at 27 MHz), and the window commands the u8g2 driver sends before each of the 35 tile rows. The CPU waits for it.
+- Sending a whole screen takes 32.2 ms: 29.9 ms of pixels (240×280 in RGB444 at 27 MHz), and the window commands the u8g2 driver sends before each of the 35 tile rows. The CPU waits for it.
 - Fewer tile rows take less RAM and more time: u8g2 draws the whole screen once per page.
 - The drawing time varies by a few ms with what is on the screen; the figures are from one run.
 - Variables: 348 bytes (u8g2 and mui 296). The highest stack: 656 bytes with clut_dma, 744 in software, with the menu. Code and fonts: about 15 kB in ITCM.
 
-## Auto gauge demo
+## Speed gauge demo
 
-![The auto gauge at 194 km/h, landscape](../../fig/async.png)
+![The speed gauge at 194 km/h, landscape](../../fig/async.png)
 
-An auto gauge (`fw/async.c`, `make async`): the whole screen in one clut_dma request, interrupt driven; the CPU sleeps while the screen is sent.
+A speed gauge (`fw/async.c`, `make async`): the whole screen in one clut_dma request, interrupt driven; the CPU sleeps while the screen is sent.
+
 Adapted from 06-Auto-Guage of [nishad2m8/T-Display-S3-YT](https://github.com/nishad2m8/T-Display-S3-YT), an LVGL gauge on a LilyGO T-Display S3; here in 1 bpp with colors per tile, drawn with u8g2, in landscape, 280×240 (MADCTL with MV, `ASYNC_MADCTL`; only this demo).
-The image: fbmem read from the board, at twice the size, as clut_dma sends it (here the RISC-V build).
+
+The image: the frame buffer read from the board (here the RISC-V build), at twice the size, as clut_dma sends it.
 
 The CLUT does the animation.
 The band is drawn once: 11 segments, each in its own three tile columns and its own CLUT entry; a segment is lit or dim by its CLUT entry alone, without drawing.
@@ -255,12 +266,64 @@ Measured over a whole drive cycle; FPS and CPU % as on the display, smoothed ove
 
 | | Cortex-M1, 54 MHz, SPI 27 MHz | GoRV32, 24 MHz, SPI 12 MHz |
 |---|---|---|
-| send of a whole screen | 29.9 ms | 67.2 ms |
+| sending a whole screen | 29.9 ms | 67.2 ms |
 | frames per second | 30 to 32 | 14 |
-| CPU | 3.5 to 10 % | 3.5 to 6 % |
+| CPU | 3.4 to 8.6 % | 3.5 to 6.2 % |
 
 - RAM for the display: 8,989 bytes, the buffer (8,400), tile map (525) and CLUT (64).
-- The SPI is the limit. A frame is the send of the screen, and the changes, which wait for the end of the send: clut_dma reads the buffer and the CLUT while it sends. The CPU sleeps the rest.
+- The SPI is the limit. A frame is sending the screen, waiting until sending ends, then updating what changed (the segment CLUT entries, the speed, FPS and CPU %). The updates wait because clut_dma reads the buffer and the CLUT while it sends. The CPU sleeps the rest.
 - The CPU % is low because only a few digits are drawn per frame; a screen drawn anew every frame costs more.
-  Nearly all of the CPU time is drawing the speed digits; switching segments in the CLUT takes 5 µs per frame, starting the send 9 µs (Cortex-M1).
-- The original redraws its labels on every pass of its loop; LVGL limits the screen to one refresh per 30 ms. Here the send of the screen is the limit.
+  Nearly all of the CPU time is drawing the speed digits; switching segments in the CLUT takes 5 µs per frame, starting to send 9 µs (Cortex-M1).
+
+## Anti-aliased menu demo
+
+| main menu | values, a radio button with the focus |
+|---|---|
+| ![main menu](../../fig/mui2bpp-main.png) | ![values](../../fig/mui2bpp-values.png) |
+
+A menu with mui in English and Chinese, at 2 bits per pixel, anti-aliased (`fw/mui2bpp.c`, `make mui2bpp`).
+The library, the menu and the fonts are in [`mui_2bpp`](../../mui_2bpp/README.md): a minimal u8g2 for the 2 bpp bitmap of clut_dma, enough for mui.
+The field with the focus and the value being edited are colors of their tiles, not drawn; checkboxes, radio buttons and the status icons are glyphs (Material Symbols).
+
+The frames: from `make sim-mui2bpp`, at twice the size.
+
+The u8x8 ST7789 driver of u8g2 sends a tile row at a time.
+clut_dma comes in through `fw/u8x8_clut_dma_2bpp.c`: a request with CTRL BPP2 for each tile row.
+Without `USE_CLUT_DMA` the CPU expands the colors (`mui_2bpp/src/u8x8_clut_2bpp.c`).
+The buffer, the tile map and the CLUT are in fbmem (`fw/mui2bpp.h`): CLUT 128 bytes, tile map 450, bitmap 14,400: 14,978 bytes; 14,984 of 16,384 with the alignment of the bitmap.
+
+In `fw/`:
+
+```
+make mui2bpp       # the demo; keys over the uart (make term)
+make sim-mui2bpp   # the menu through the rtl twice, the cpu expanding the colors
+                   # and clut_dma: sim-mui2bpp/{cpu,dma}/frame_NN.png
+make demo-menu     # with keys sent over the uart, for a video (mui2bpp_demo.sh);
+                   # MENU_OPTS: build options, default STATS=1
+```
+
+Keys: `w` `s` or up down: field, space or enter: select, `i` other status icons, `b` benchmark: 20 screens.
+
+Build options of `make mui2bpp`; change an option with `make -B`:
+
+| option | |
+|---|---|
+| `PAGE_ROWS=n` | the buffer: n tile rows; default 30, the whole screen |
+| `USE_CLUT_DMA=0` | no clut_dma: the CPU expands the colors and writes the bytes to the SPI; default 1, clut_dma (`fw/u8x8_clut_dma_2bpp.c`) |
+| `STATS=1` | after each key the tile rows sent and the time on the uart; key `f`: 20 focus changes; the about form shows the last focus change and the last whole screen |
+
+`make sim-mui2bpp` sends 7 screens through the RTL both ways, in about 2.5 minutes: 355,606 bytes to the display, the same with clut_dma (123 requests) as with the CPU. A focus change sends only the tile rows of the two fields: 8 or 4 tile rows instead of 30.
+
+Measured with key `b`: Cortex-M1 at 54 MHz, SPI at 27 MHz, 240×240 in RGB444, a whole screen drawn and sent.
+
+| variant | RAM for the display | per screen | code and fonts (ITCM) |
+|---|---|---|---|
+| software | 14,978 bytes | 102.3 ms | 23,572 bytes |
+| clut_dma | 14,978 bytes | 39.5 ms | 23,504 bytes |
+
+- Sending a whole screen: 86,400 bytes of pixels, 25.6 ms at 27 MHz, and the window commands of the 30 tile rows. The rest is drawing: mui draws the form anew. A focus change draws and sends only the tile rows of the field that had the focus and of the field that has it.
+- A focus change to the next field: 8 tile rows, 13.1 ms (`make -B mui2bpp STATS=1`, key `f`: 20 focus changes from the first field of a form; with STATS=1 each key prints its tile rows and time).
+- In software the CPU expands every pixel: 2.6 times as long.
+- The fonts: the text 130 glyphs, 35 of them Chinese, 10,410 bytes; the status icons 928 bytes; the controls 536 bytes.
+- RAM and stack of the menu, measured on both boards: [mui_2bpp](../../mui_2bpp/README.md#ram).
+- After a load the first line on the uart is at times garbled: openocd still uses the USB bridge of the board, which also carries the uart. `make mui` shows the same.

@@ -425,7 +425,7 @@ static void frame_report(uint32_t total)
 }
 #endif
 
-#ifdef SOLDER_TEST
+#if defined(SOLDER_TEST) || defined(ASYNC_TEST)
 /* the highest stack use: the free ram between .bss and the stack is filled
    with a pattern at the start; the lowest word that changed */
 extern uint32_t _sbss[], _ebss[], _estack[];
@@ -697,11 +697,12 @@ int main(void)
 
 #ifdef ASYNC_TEST
   {
-    /* the auto gauge: the whole screen in one clut_dma request, the cpu
+    /* the speed gauge: the whole screen in one clut_dma request, the cpu
        asleep while it is sent; every 2 s FPS and CPU %, as on the display */
     uint32_t report = now(), fps10, cpu10;
 
-    puts_("\nauto gauge: the whole screen in one clut_dma request, interrupt driven, "
+    stack_fill();
+    puts_("\nspeed gauge: the whole screen in one clut_dma request, interrupt driven, "
           "the cpu sleeps while it is sent\n");
     lcd_init();
     lcd_cmd1(0x36, ASYNC_MADCTL);  /* MADCTL: landscape 280x240 */
@@ -720,7 +721,9 @@ int main(void)
         putdec(cpu10 / 10);
         puts_(".");
         putdec(cpu10 % 10);
-        puts_(" %\n");
+        puts_(" %, stack ");
+        putdec(stack_used());
+        puts_(" bytes\n");
       }
     }
   }

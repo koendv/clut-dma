@@ -12,12 +12,25 @@
 #                With compressed instructions all fit in the 32 KiB On-Chip
 #                RAM. The 64 KB configuration of GoRV32 is faulty: a byte
 #                store at times lands one word further (found with stars).
-#   make async   the auto gauge of the Cortex-M1 build (async.c): the whole
+#   make mui2bpp the menu of ../../../mui_2bpp (mui2bpp.c of the Cortex-M1
+#                build): 2 bits per pixel, anti-aliased, English and Chinese,
+#                keys on UART1; a page buffer of MUI2_PAGE_ROWS tile rows
+#                (default 4, a field). USE_CLUT_DMA=0: the cpu expands the colors.
+#                key b: a benchmark. STATS=1: tile rows and time per
+#                key, key f: a benchmark of a focus change
+#   make async   the speed gauge of the Cortex-M1 build (async.c): the whole
 #                screen in one clut_dma request, interrupt driven (PLIC)
+#   make demo    the u8g2 examples one after the other, then a walk through
+#                the menu with keys over the uart (demo.sh of the Cortex-M1
+#                build); waits for enter, for a video
 #   make demo-solder  solder with keys over the uart, for a video
 #                (solder_demo.sh of the Cortex-M1 build, the same keys).
 #                OPTS: the build options of make solder, default COLOR=1;
 #                OPTS= for black and white
+#   make demo-menu  the anti-aliased menu with keys over the uart, for a
+#                video (mui2bpp_demo.sh of the Cortex-M1 build, the same
+#                keys). MENU_OPTS: the build options of make mui2bpp,
+#                default STATS=1
 # main.c is a copy of the Cortex-M1 main.c with another platform: UART1,
 # mcycle, fbmem in On-Chip RAM. testimg.c and testimg.h are those of the
 # Cortex-M1 build.
@@ -60,6 +73,10 @@ endif
 ifdef COLOR
 CFLAGS += -DSOLDER_COLOR
 endif
+# make mui2bpp STATS=1: tile rows and time per key, key f (mui2bpp.c)
+ifdef STATS
+CFLAGS += -DMUI2_STATS
+endif
 ifdef LCD_MADCTL
 CFLAGS += -DLCD_MADCTL=$(LCD_MADCTL)u
 endif
@@ -97,7 +114,7 @@ solder.elf: $(FW_DEP) $(SOLDER_SRC)
 	$(CC) $(CFLAGS) $(U8G2_DEFS) -DSOLDER_TEST -o $@ $(FW_SRC) $(SOLDER_SRC) $(LDFLAGS) lib-rv/libu8g2.a -lc -lgcc
 	$(CROSS)size $@
 
-# the auto gauge: one request per screen, interrupt driven
+# the speed gauge: one request per screen, interrupt driven
 async.elf: $(FW_DEP) $(M1FW)/async.c
 	$(CC) $(CFLAGS) $(U8G2_DEFS) -DASYNC_TEST -o $@ $(FW_SRC) $(M1FW)/async.c $(LDFLAGS) lib-rv/libu8g2.a -lc -lgcc
 	$(CROSS)size $@
@@ -120,16 +137,51 @@ stars.elf: $(FW_DEP) $(STARS_OBJ)
 scl lcd border palette clutcolor clutclock graphics mui stars solder async: %: %.elf
 	$(OPENOCD) -f ../rv.cfg -c "init; rv_run $<; shutdown"
 
+# mui_2bpp: its own u8g2.h, not the u8g2 of the other demos; mui2bpp.c of
+# the Cortex-M1 build, which keeps the buffer, map and clut in On-Chip RAM
+# here. The copies of u8x8 and mui without warnings; the pixels from clut_dma
+# (u8x8_clut_dma_2bpp.c) or the cpu (mui_2bpp/src/u8x8_clut_2bpp.c)
+MUI2           = ../../../mui_2bpp
+MUI2_PAGE_ROWS ?= 4
+MUI2_DEFS = -DU8X8_WITH_CLUT -DMUI_U8G2_GRID=8 -DU8G2_PAGE_ROWS=$(MUI2_PAGE_ROWS) \
+	-I$(MUI2)/src -I$(MUI2)/u8x8 -I$(MUI2)/mui -I$(MUI2)/demo
+MUI2_COPY = $(addprefix $(MUI2)/,u8x8/u8x8_setup.c u8x8/u8x8_display.c u8x8/u8x8_cad.c \
+	u8x8/u8x8_byte.c u8x8/u8x8_gpio.c u8x8/u8x8_d_st7789.c u8x8/u8x8_u8toa.c mui/mui.c mui/mui_u8g2.c)
+MUI2_SRC  = $(addprefix $(MUI2)/,src/u8g2_2bpp.c src/u8g2_button.c src/u8g2_circle.c demo/menu.c demo/forms_en.c \
+	demo/forms_zh.c demo/font_noto_sc_24.c demo/font_icons_20.c demo/font_controls_28.c)
+MUI2_HDR  = $(wildcard $(MUI2)/src/*.h $(MUI2)/u8x8/*.h $(MUI2)/mui/*.h $(MUI2)/demo/*.h) hw.h
+MUI2_CPU  = $(MUI2)/src/u8x8_clut_2bpp.c
+
+mui2bpp.elf: start.S $(M1FW)/mui2bpp.c $(M1FW)/u8x8_clut_dma_2bpp.c $(MUI2_SRC) $(MUI2_COPY) $(MUI2_CPU) $(MUI2_HDR) rv.ld
+	rm -rf obj-mui2bpp && mkdir -p obj-mui2bpp
+	cd obj-mui2bpp && $(CC) $(filter-out -Wall -Wextra -I. -I$(M1FW),$(CFLAGS)) -w \
+	  $(MUI2_DEFS:-I../%=-I../../%) -c $(addprefix ../,$(MUI2_COPY))
+	$(CC) $(CFLAGS) $(MUI2_DEFS) -o $@ start.S $(M1FW)/mui2bpp.c \
+	  $(if $(filter 1,$(USE_CLUT_DMA)),$(M1FW)/u8x8_clut_dma_2bpp.c,$(MUI2_CPU)) $(MUI2_SRC) \
+	  obj-mui2bpp/*.o $(LDFLAGS) -lc -lgcc
+	$(CROSS)size $@
+
+mui2bpp: mui2bpp.elf
+	$(OPENOCD) -f ../rv.cfg -c "init; rv_run $<; shutdown"
+
 bit:
 	$(MAKE) -C .. load
 
 load: fw.elf
 	$(OPENOCD) -f ../rv.cfg -c "init; rv_run fw.elf; shutdown"
 
+# the examples one after the other and a walk through the menu, for a video
+demo:
+	TTY='$(TTY)' $(M1FW)/demo.sh
+
 # the soldering station with keys over the uart, for a video
 OPTS ?= COLOR=1
 demo-solder:
 	OPTS='$(OPTS)' TTY='$(TTY)' $(M1FW)/solder_demo.sh
+
+MENU_OPTS ?= STATS=1
+demo-menu:
+	OPTS='$(MENU_OPTS)' TTY='$(TTY)' $(M1FW)/mui2bpp_demo.sh
 
 term:
 	minicom -D $(TTY) -b 115200
@@ -140,4 +192,4 @@ clean:
 distclean: clean
 	rm -rf lib-rv obj-rv
 
-.PHONY: scl lcd border palette clutcolor clutclock graphics mui stars solder demo-solder bit load term clean distclean
+.PHONY: scl lcd border palette clutcolor clutclock graphics mui stars solder async mui2bpp demo demo-solder bit load term clean distclean

@@ -2,7 +2,7 @@
 /* Copyright (c) 2026 Koen De Vleeschauwer */
 
 /*
-  async.c: an auto gauge, the whole screen sent in one clut_dma request,
+  async.c: a speed gauge, the whole screen sent in one clut_dma request,
   interrupt driven: the CPU sleeps while the screen is sent.
 
   The gauge is adapted from 06-Auto-Guage of nishad2m8/T-Display-S3-YT

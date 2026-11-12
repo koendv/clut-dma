@@ -118,7 +118,8 @@ module clut_fabric_ahb (
     .reg_wdata(reg_wdata), .reg_rdata(reg_rdata)
   );
 
-  clut_dma dma (
+  // BPP2: also 2 bits per pixel (fw: make mui2bpp)
+  clut_dma #(.BPP2(1)) dma (
     .clk(clk), .rst_n(rst_n),
     .reg_wr(reg_wr), .reg_rd(reg_rd), .reg_addr(reg_addr),
     .reg_wdata(reg_wdata), .reg_rdata(reg_rdata),

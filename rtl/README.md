@@ -1,7 +1,7 @@
 # clut_dma.v
 
-For the MCU designer. The deliverable of this repository is one Verilog file,
-[`clut_dma.v`](clut_dma.v): a DMA engine that reads a 1 bpp bitmap, a tile
+For the MCU designer. The DMA engine is one Verilog file,
+[`clut_dma.v`](clut_dma.v). It reads a 1 bpp bitmap, a tile
 map and a color lookup table from memory, and sends RGB565, RGB444 or
 RGB666 pixels straight to an SPI display. Its header comment is the
 reference; this page is the overview. The bus adapters, the FPGA builds and
@@ -53,7 +53,8 @@ For memory with less than 32 wait states, and with the default CACHE = 1, speed 
 In simulation (`make measure`: whole 240×240 screens, random tile map, SPI at the system clock, memory reads of 2 cycles):
 
 - row layout: 10.9 word reads per tile, one read per 101 cycles, the bus busy about 2% of the cycles;
-- vertical layout: 24.7 word reads per tile, one read per 45 cycles, the bus busy about 4.5% of the cycles.
+- vertical layout: 24.7 word reads per tile, one read per 45 cycles, the bus busy about 4.5% of the cycles;
+- 2 bpp, row layout: 20.2 word reads per tile, one read per 55 cycles, the bus busy about 3.6% of the cycles.
 
 On the boards, in the soldering station demo, color takes no time: a frame in color takes as long as in black and white, on both builds, within 1%.
 The map and CLUT words are read beside the bitmap words, in the margin the SPI leaves; the SPI stays the limit.
@@ -64,7 +65,7 @@ The CPU draws in black and white either way; color only costs the RAM of the map
 
 | offset | register | |
 |---|---|---|
-| 0x00 | CTRL | bit 0 START (write 1), bits 2:1 FORMAT (0 RGB565, 1 RGB444, 2 RGB666), bit 3 IRQ_EN, bit 4 VERT, bit 5 NO_MAP |
+| 0x00 | CTRL | bit 0 START (write 1), bits 2:1 FORMAT (0 RGB565, 1 RGB444, 2 RGB666), bit 3 IRQ_EN, bit 4 VERT, bit 5 NO_MAP, bit 6 BPP2 |
 | 0x04 | STATUS | bit 0 BUSY, bit 1 DONE, bit 2 ERR; DONE and ERR: write 1 to clear |
 | 0x08 | FB_START | bitmap address of the first tile |
 | 0x0C | MAP_START | map byte with the entry of the first tile |
@@ -95,6 +96,8 @@ A quick estimate: synthesized with Yosys to generic 2-input gates (`make size`):
 |---|---|---|---|
 | CACHE = 1 (default) | 409 | 1,623 | 5,376 |
 | CACHE = 0 | 345 | 1,467 | 4,654 |
+| BPP2 = 1 | 491 | 1,890 | 6,436 |
+| BPP2 = 1, VERT = 0 | 481 | 1,751 | 6,146 |
 
 Gate equivalents: NAND2 = 1, weights in `tb/ge.awk`.
 
@@ -148,9 +151,9 @@ In the same synthesis, without wires, the longest path inside clut_dma is about 
 ### Limits
 
 - W and H up to 4,095 pixels; LINE_STRIDE up to 65,535 bytes.
-- CLUT 64-byte aligned; map and row-layout bitmap at any byte, vertical-layout bitmap 8-byte aligned.
+- CLUT 64-byte aligned, with 2 bits per pixel 128-byte aligned; map and row-layout bitmap at any byte, vertical-layout bitmap 8-byte aligned.
 - RGB565, RGB444 (W even) and RGB666.
-- 1 bit per pixel. The anti-aliasing variants of the publication (2 bits per pixel, two bit planes) are not built.
+- 1 bit per pixel; with the parameter BPP2 also 2 bits per pixel (variant 15 of the publication), row layout only: the code of a pixel selects one of the four colors of its CLUT entry. Two bit planes (variant 16) are not built.
 
 ### Status
 
@@ -177,8 +180,7 @@ RISC-V: GoRV32 has an AHB slave port, an AHB master port into its memory, and AP
 The registers are on the AHB slave; clut_dma reads the frame buffer, tile map and CLUT from CPU RAM through its own AHB-Lite master, as it would in an MCU.
 The limits are those of the core on this FPGA: Fmax is about 35 MHz, and the 64 KB On-Chip RAM configuration is faulty, so the build runs at 24 MHz with 32 KiB for program and data.
 
-The publication v1.0 ([clut-dma.pdf](../clut-dma.pdf)) describes an earlier model: the APB3 port inside the module, and the registers MAP, LINE_OFFSET and FIRST instead of MAP_START, LINE_STRIDE and MAP_NIBBLE, row layout only.
-The v1.1 draft ([clut-dma.md](../clut-dma.md)) describes this file.
+The publication ([clut-dma.pdf](../clut-dma.pdf), source [clut-dma.md](../clut-dma.md)) describes this file.
 
 ## Bus adapters and test harnesses
 
@@ -228,9 +230,10 @@ Tests of `clut_dma.v`:
 - `fpga/size/`: stubs of clut_dma and clut_fabric, for `size.sh`.
 - `fpga/tb/`: tests of the fabric and of the firmware, above.
 - `nightly.sh`: the overnight tests, on a snapshot of the last commit.
-- `clut-dma.pdf`: the publication, v1.0, as on Zenodo. `clut-dma.md`: the
-  working draft of v1.1. `fig/`: its two figures, SVG, and two frames of
-  the soldering station demo, PNG.
+- `clut-dma.pdf`: the publication, as on Zenodo. `clut-dma.md`: its source.
+- `fig/`: the figures of the publication and the pictures of the READMEs.
+- `mui_2bpp/`: a minimal u8g2 for the 2 bpp bitmap, with mui menus and
+  anti-aliased fonts ([mui_2bpp/README.md](../mui_2bpp/README.md)).
 
 ## Requirements
 
@@ -257,11 +260,11 @@ make test-nocache  # the same with CACHE = 0
 make ahb           # the tests of make test behind the AHB-Lite adapters, and a bus error
 make fabric        # the ARM clut_fabric as the cpu uses it, with the display window commands
 make lint          # verilator lint of all rtl
-make size          # yosys flip-flops, gates and gate equivalents, CACHE = 1 and 0
+make size          # yosys flip-flops, gates and gate equivalents: CACHE = 1 and 0, BPP2 = 1, BPP2 = 1 with VERT = 0
 make formal        # SymbiYosys, the short tasks, about 8 minutes
-make measure       # spi underrun for spi clock and memory wait states, row and vertical layout, about 40 minutes;
+make measure       # spi underrun for spi clock and memory wait states, all modes, about 50 minutes;
                    # make measure WAIT_STATES="16 24 32" for external memory
-make pdf           # clut-dma.pdf from the draft (replaces the v1.0 PDF), README.pdf
+make pdf           # clut-dma.pdf from clut-dma.md, README.pdf
 make zip           # build/clut-dma.zip, the files of the last commit
 make binzip        # build/clut-dma-bin-<commit>.zip: the bitstreams and firmware of both builds
 ./nightly.sh &     # the long tests, results in build/nightly/latest/summary.txt

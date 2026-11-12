@@ -40,6 +40,7 @@
 #define DMA_IRQ_EN 0x08u
 #define DMA_VERT   0x10u
 #define DMA_NO_MAP 0x20u
+#define DMA_BPP2   0x40u          /* 2 bits per pixel, clut_dma parameter BPP2 */
 
 /* spi_lcd, fpga/rtl/spi_lcd.v */
 #define SPI_DATA        REG(0x60000040)

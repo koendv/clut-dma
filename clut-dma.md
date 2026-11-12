@@ -1,7 +1,7 @@
 ---
-title: "Color expansion of a 1-bpp frame buffer with a per-tile color lookup table in an MCU DMA engine"
+title: "Color expansion of a 1-bpp or 2-bpp frame buffer with a per-tile color lookup table in an MCU DMA engine"
 author: Koen De Vleeschauwer
-date: 2026-11-11, version 1.1
+date: 2026-11-16, version 1.2
 lang: en
 CJKmainfont: NotoSerifCJK-Regular.ttc
 CJKoptions:
@@ -34,21 +34,24 @@ stages with one register between them: a fetch stage that reads memory
 and an output stage that sends the bytes, so the memory reads of a tile
 overlap the output of the previous tile. The same
 expansion in the scan-out path of a display controller is also described.
-Two anti-aliasing variants are also disclosed: 2 bits per pixel, and two
+Two anti-aliasing variants are also disclosed: 2 bits per pixel, where
+the code of a pixel selects one of four colors of its tile's entry, and two
 bit planes (section 6).
 This document is a defensive publication: it discloses the methods
 described, and the variants listed in section 6, so that they are prior
 art.
 
 Keywords: DMA, color lookup table, palette, bitmap, tile, frame buffer,
-SPI display, microcontroller, anti-aliasing
+SPI display, microcontroller, anti-aliasing, 2 bits per pixel, coverage,
+menu, focus, partial update, per-character color, palette animation
 
-CPC: G09G 5/06, G09G 5/395, G09G 5/399, G09G 2340/08, G09G 2360/122,
-G09G 2350/00, G09G 2310/04, G06F 13/28, G06T 2200/12
+CPC: G09G 5/06, G09G 5/024, G09G 5/28, G09G 5/30, G09G 5/395, G09G 5/399,
+G09G 2340/08, G09G 2360/122, G09G 2350/00, G09G 2310/04, G06F 13/28,
+G06T 2200/12, G06F 3/0482, G09G 2354/00
 
 ## 摘要
 
-**在 MCU DMA 引擎中利用逐图块颜色查找表对 1bpp 帧缓冲区进行颜色扩展**
+**在 MCU DMA 引擎中利用逐图块颜色查找表对 1bpp 或 2bpp 帧缓冲区进行颜色扩展**
 
 本文公开一种在微控制器（MCU）的 DMA 引擎中进行颜色扩展的方法。帧缓冲区为每像素
 1 位（1bpp）的位图，按 8×8 像素的图块组织；每个图块有一个 4 位索引，指向包含 16
@@ -57,14 +60,15 @@ G09G 2350/00, G09G 2310/04, G06F 13/28, G06T 2200/12
 接口。全程无需彩色帧缓冲区。240×240 显示屏只需 7.7 kB（7,714 字节）内存，而 16 位帧缓冲区需要
 115 kB（115,200 字节）。目的是使无法负担彩色帧缓冲区的微控制器也能使用彩色显示屏。修改调色板中的一项即可改变所有使用该项的图块的颜色，无需软件重绘。引擎分为
 两级，中间只有一个寄存器：读取内存的取数级和发送字节的输出级，因此一个图块的内存读取
-与前一个图块的输出重叠进行。本文同时描述了显示控制器扫描输出路径中的这种扩展。此外还公开了两种抗锯齿变体：每像素 2 位，以及两个位平面（第 6 节）。本文为防御性公开，使所述方法及第 6 节列出的
+与前一个图块的输出重叠进行。本文同时描述了显示控制器扫描输出路径中的这种扩展。此外还公开了两种抗锯齿变体：每像素 2 位，像素的 2 位代码从其图块的调色板项的四种颜色中选择一种；以及两个位平面（第 6 节）。本文为防御性公开，使所述方法及第 6 节列出的
 变体成为公开的现有技术。
 作者不寻求专利权，并承诺不就本文所公开的方法主张任何专利权，欢迎将这些方法用于低成本微控制器的彩色显示。
 
-关键词：DMA，直接存储器访问，颜色查找表，色彩查找表，调色板，索引色，位图，单色位图，图块，瓦片，帧缓冲区，帧缓存，显存，前景色，背景色，颜色扩展，单色转彩色，SPI 显示屏，串行外设接口，彩色液晶屏，微控制器，单片机，抗锯齿
+关键词：DMA，直接存储器访问，颜色查找表，色彩查找表，调色板，索引色，位图，单色位图，图块，瓦片，帧缓冲区，帧缓存，显存，前景色，背景色，颜色扩展，单色转彩色，SPI 显示屏，串行外设接口，彩色液晶屏，微控制器，单片机，抗锯齿，每像素2位，覆盖率，灰度抗锯齿，菜单，焦点，局部刷新，圆角，滑块，逐字符颜色，调色板动画
 
-分类号（CPC）：G09G 5/06, G09G 5/395, G09G 5/399, G09G 2340/08, G09G 2360/122,
-G09G 2350/00, G09G 2310/04, G06F 13/28, G06T 2200/12
+分类号（CPC）：G09G 5/06, G09G 5/024, G09G 5/28, G09G 5/30, G09G 5/395, G09G 5/399,
+G09G 2340/08, G09G 2360/122, G09G 2350/00, G09G 2310/04, G06F 13/28,
+G06T 2200/12, G06F 3/0482, G09G 2354/00
 
 ## 1. Problem
 
@@ -91,7 +95,9 @@ drawing code.
   foreground and 4-bit background color per 8×8 cell, from a fixed
   palette.
 - IBM VGA text mode: per character a 4-bit foreground and a 4-bit
-  background index into 16 palette registers.
+  background index into 16 palette registers. Menus in text mode show the
+  selected item by rewriting the attribute bytes of its characters, not
+  the characters.
 - Game consoles (NES, Sega Master System, SNES, Game Boy Color): per tile
   an index selects one of a few small palettes. On the Game Boy Color, 3
   bits select one of 8 palettes of 4 colors, for 2-bit tiles.
@@ -100,9 +106,9 @@ drawing code.
   pixel and one constant color, blended with a background image, memory to
   memory.
 
-This publication differs in the combination: a 1-bit bitmap, or 2 bits for
-blends of the pair, a per-tile index into a table of foreground/background
-pairs, expanded during a DMA transfer from MCU memory into a serial display
+This publication differs in the combination: a 1-bit bitmap, or 2 bits
+selecting one of four colors of the entry, a per-tile index into a table
+of foreground/background pairs, or of four colors, expanded during a DMA transfer from MCU memory into a serial display
 interface, with no color frame memory in the MCU. DMA2D and LTDC look up a
 CLUT entry per pixel, with 4 or 8 bits of index for every pixel, or blend
 one constant color with a background image, and write the result to
@@ -165,15 +171,15 @@ for the application; with a page buffer of a few tile rows it fits
 Changing a CLUT entry recolors all tiles with that index at the next
 transfer, without drawing. Changing a map nibble recolors one tile.
 
+\needspace{26\baselineskip}
+
 ## 4. DMA engine
 
 ### 4.1 Registers and request
 
-\needspace{18\baselineskip}
-
 | offset | register | contents |
 |---|---|---|
-| 0x00 | CTRL | START, FORMAT (RGB565, RGB444, RGB666), IRQ_EN, VERT (tile layout), NO_MAP |
+| 0x00 | CTRL | START, FORMAT (RGB565, RGB444, RGB666), IRQ_EN, VERT (tile layout), NO_MAP, BPP2 (2 bits per pixel) |
 | 0x04 | STATUS | BUSY, DONE, ERR |
 | 0x08 | FB_START | bitmap address of the first tile |
 | 0x0C | MAP_START | map byte with the entry of the first tile |
@@ -197,8 +203,8 @@ and writes:
   row layout, where a line is a pixel row; 8·TILE_COLS in the tile
   layout, where a line is a tile row. The map has as many tiles per tile
   row as the bitmap, so its stride follows from LINE_STRIDE.
-- SIZE, and CTRL with START, FORMAT, IRQ_EN, VERT for the tile layout, and
-  NO_MAP.
+- SIZE, and CTRL with START, FORMAT, IRQ_EN, VERT for the tile layout,
+  NO_MAP, and BPP2 for 2 bits per pixel.
 
 The engine sends the rectangle, pixel row by pixel row, and sets DONE
 when the last byte has left the engine. W and H need not be a multiple
@@ -210,6 +216,11 @@ and MAP_START and MAP_NIBBLE are not used. A plain 1-bit bitmap is then
 sent with one color pair, and the CLUT is a single word: with white as all
 ones and black as all zeros, 0x0000FFFF is white on black and 0xFFFF0000
 black on white, in RGB565, RGB444 and RGB666 alike.
+
+With BPP2 set, a pixel has 2 bits, in the row layout only, and CLUT bit 6
+is also ignored (variants 15 and 25). An engine built without the tile
+layout or without 2 bits per pixel ignores VERT or BPP2 and reads it as 0
+(variant 26).
 
 As the address and count registers of a DMA channel, FB_START,
 MAP_START, MAP_NIBBLE and H change during the transfer; the CPU writes
@@ -357,12 +368,27 @@ registers and a master adapter for the reads (section 7).
 In gate equivalents (NAND2 = 1; NOT 0.67; AND, OR 1.33; XOR, multiplexer
 2.33; flip-flop 4.5, plus 1 with asynchronous reset, plus 1.5 with
 enable) the engine is about 5,400 (`make size`); with the APB3 adapter,
-which is wiring only, the same.
+which is wiring only, the same. The tile layout and 2 bits per pixel are
+options of the model, parameters VERT and BPP2 (variant 26); the four
+engines they give:
+
+\needspace{8\baselineskip}
+
+| engine | flip-flops | gates | gate equivalents |
+|----------------------------------|------|------|------|
+| 1 bit per pixel, both layouts (sections 4.1 to 4.3) | 409 | 1,617 | 5,371 |
+| both layouts, and 2 bits per pixel in the row layout | 491 | 1,890 | 6,436 |
+| row layout only, 1 bit per pixel | 399 | 1,455 | 5,053 |
+| row layout only, 1 or 2 bits per pixel | 481 | 1,751 | 6,146 |
+
+2 bits per pixel adds 82 flip-flops and about 1,065 gate equivalents
+(variant 25).
 
 As a rough estimate in standard cells: synthesized to the cells of an open
 180 nm process (GF180MCU, 7-track 5 V cells, Yosys and OpenROAD,
 synthesis only, gate equivalents as cell area divided by the area of the
-smallest NAND2), the engine alone is about 6,700 gate equivalents, more
+smallest NAND2), the 1-bit engine with both layouts (version 1.1) alone
+is about 6,700 gate equivalents, more
 than the weighted count above, partly because this cell library has no
 flip-flop with an enable: each register bit with an enable becomes a
 flip-flop and a multiplexer. Added to a small RISC-V microcontroller (the
@@ -371,13 +397,15 @@ read master and a second master port on the bus, the engine adds about
 7,000 gate equivalents.
 
 On an FPGA with 4-input LUTs, synthesized and placed with the tools of the
-FPGA vendor, the engine takes 638 LUTs, 84 ALUs and 385 flip-flops, and
-no RAM. In the same design, a 32-bit ARMv6-M (Cortex-M0 class) soft
-processor core, with debug, interrupt controller, tightly coupled
-memories and a UART, takes 5,216 LUTs, 174 ALUs and 2,374 flip-flops, and
-32 block RAMs for its memories. The engine is about 13\ % of the logic of
-the processor (LUTs and ALUs) and 16\ % of its flip-flops. Measured as the
-difference between the whole design with and without the engine.
+FPGA vendor, the engine with 2 bits per pixel and both layouts takes 776
+LUTs, 84 ALUs and 466 flip-flops, and no RAM. In the same design, a 32-bit
+ARMv6-M (Cortex-M0 class) soft processor core, with debug, interrupt
+controller, tightly coupled memories and a UART, takes 5,216 LUTs, 174
+ALUs and 2,374 flip-flops, and 32 block RAMs for its memories. The engine
+is about 16\ % of the logic of the processor (LUTs and ALUs) and 20\ % of
+its flip-flops. Measured as the difference between the whole design with
+and without the engine. The 1-bit engine of version 1.1 took 638 LUTs, 84
+ALUs and 385 flip-flops: 13\ % and 16\ %.
 
 ### 4.5 Throughput
 
@@ -387,7 +415,8 @@ wait states, and an SPI with one data register and a shift register of
 fastest case. Each case in RGB565, RGB444 and RGB666: three whole 240×240
 screens in the row layout, 374,400 bytes; the same in the tile layout;
 and three rectangles one tile wide and 240 pixels high on a 320×240
-display (TILE_COLS = 40), row layout, 12,480 bytes.
+display (TILE_COLS = 40), row layout, 12,480 bytes; and three whole
+240×240 screens at 2 bits per pixel (variant 25), 374,400 bytes.
 
 The engine uses little of the memory bus. Memory reads per tile (64
 pixels), the same for all *P* and *ws*, and at *P* = 8 the system clock
@@ -401,17 +430,21 @@ cycles per memory read:
 | whole screens, row layout, one CLUT index for all tiles | 3.5 | 320 |
 | one tile wide, row layout | 16.9 | 65 |
 | whole screens, tile layout, random tile map | 24.7 | 45 |
+| whole screens, 2 bits per pixel, random tile map | 20.2 | 55 |
 
 At a memory read of 2 cycles, the engine occupies the bus in about 2\ %
-of the cycles in the row layout and about 4.5\ % in the tile layout; the
-CPU and other bus masters have the rest. With a slower SPI (*P* = 16, 32)
+of the cycles in the row layout, about 3.6\ % at 2 bits per pixel and
+about 4.5\ % in the tile layout; the CPU and other bus masters have the
+rest. With a slower SPI (*P* = 16, 32)
 these shares halve and halve again.
 
 An underrun is a cycle in which the SPI shift register is idle during a
 request. For *P* = 8, 16 and 32 and *ws* = 0, 1, 2, 4, 8, 16, 24 and 32
-there are none in the row layout, in both of its cases. In the tile
-layout there are none up to 24 wait states; at 32 wait states and *P* = 8
-the screens take 2.9\ % longer. Internal SRAM of an MCU has 0 to a few
+there are none in the row layout at 1 bit per pixel, in both of its
+cases. In the tile layout there are none up to 24 wait states; at 32 wait
+states and *P* = 8 the screens take 2.9\ % longer. At 2 bits per pixel
+there are none up to 24 wait states, and none at 32 wait states for *P* =
+16 and 32; at 32 wait states and *P* = 8 the screens take 0.6\ % longer. Internal SRAM of an MCU has 0 to a few
 wait states; 16 to 32 wait states are external memory, such as PSRAM over
 QSPI. Drawing a rectangle one tile wide has no more underruns than drawing whole
 screens: the engine reads only the tiles inside the rectangle, and goes
@@ -659,6 +692,186 @@ assigned otherwise.
     the row address as before. Rotating the table entries scrolls the
     colors by whole tile rows without changing the map.
 
+22. Coverage order of the codes, with the engine of variant 15 unchanged:
+    only the contents of the CLUT and the codes the CPU draws differ. The
+    code of a pixel is its coverage: 0 the background, 1 and 2 a third and
+    two thirds of the way from the background to the foreground, 3 the
+    foreground. Word 0 of a CLUT entry holds the background in bits 31:16
+    and the blend at a third in bits 15:0; word 1 the blend at two thirds
+    in bits 31:16 and the foreground in bits 15:0. The CPU computes the two
+    blends and stores them in the CLUT. In the reference implementation
+    the blends are mixed in linear light, per color channel: with the
+    channels of the foreground *f* and of the background *b* as 8-bit
+    values, the blend at *k* thirds is 255·((*k*·(*f*/255)^*g*^ +
+    (3 − *k*)·(*b*/255)^*g*^) / 3)^1/*g*^, rounded to the 4, 5 or 6 bits of
+    the channel in the CLUT. The exponent *g* is 2.2 when the foreground is
+    the lighter of the two colors (luminance 0.2126 R + 0.7152 G + 0.0722
+    B on the 8-bit values), and 1, a mix of the 8-bit values, when it is
+    the darker. With *g* = 1 light text on a dark background is too thin:
+    white on black gives 85 and 170, with *g* = 2.2 155 and 212. The
+    colors are constants: the compiler computes the two words of an
+    entry, and setting the colors of an entry is two stores of constant
+    words. Glyphs are drawn with their codes;
+    where a glyph pixel falls on a drawn pixel, it takes the larger of the
+    two codes. A box is drawn with code 3. In this order the 1-bit image is
+    not the low bit of the code: variant 16 uses the order of variant 15.
+    This is the order of the reference implementation (section 7).
+23. Menu state shown by the tile map, at 1 or 2 bits per pixel. A menu
+    screen of 240×240 pixels, 30 tile rows, is divided in bands of whole
+    tile rows, each with a CLUT entry of its own, written in the map: a
+    status row, tile rows 0 and 1; a title, tile rows 2 to 5; the content,
+    tile rows 6 to 25, five fields of 4 tile rows (32 pixels); and a back
+    field, tile rows 26 to 29. The bands separate the parts of the menu
+    without rules drawn between them. The state of a field is the CLUT
+    entry of the tiles under it, not a drawing: the field with the focus,
+    the value being edited and a button each have an entry of their own
+    (in the reference implementation white on blue, white on red, and a
+    button color). On a focus change the CPU writes the map entries of the
+    tiles under the field that had the focus back to the entry of its
+    band, and those under the field that has it to the focus entry. The
+    bitmap of a field is the same with and without the focus; its text is
+    not drawn inverted. The tiles under a field run from its left to its
+    right edge, rounded outward to tile edges, and one tile further at each
+    end, inside the screen; a field that can have the focus has tiles of
+    its own, which no label shares. The four corner tiles of a field with
+    the focus, being edited or a button have a corner entry of their own:
+    the field color as foreground on the band color as background, with the
+    blends between them. In each corner tile a quarter disc of radius 7
+    pixels is drawn, with its center on the inner corner pixel of the
+    tile, at 2 bits per pixel with its edge anti-aliased by coverage
+    (variant 22), so that the field
+    has rounded corners and nothing is drawn outside the corner tiles. A
+    corner tile holds no text: text drawn in it would have the foreground
+    of the corner entry, the field color, and not show against the disc;
+    this is why the tiles under a field reach one tile beyond its text at
+    each end. The
+    corners are the only drawing; the rest of the field is a color of its
+    tiles. The CLUT of the reference implementation has 11 entries: the
+    content, title, back and status bands, focus, edit, button, the slider
+    of variant 29, and the three corner entries.
+24. Partial update by tile rows, with the menu of variant 23. Fields start
+    on a tile row and are a whole number of tile rows high, 4 in the
+    reference implementation. On a focus change the CPU redraws and sends
+    only one span of whole tile rows, from the first tile row of the upper
+    of the two fields to the last tile row of the lower: 8 tile rows
+    instead of 30 for the next field, the rows from one field to the other
+    for fields further apart. Other changes redraw and send the whole
+    screen; new status icons send only the status rows, tile rows 0 and 1.
+    The span is sent as one request per tile row, the CPU waiting for DONE
+    after each (the reference implementation); or as one request for the
+    whole span, a rectangle of the width of the screen (section 4.1), while
+    the CPU works, when the bitmap holds the whole span: a full bitmap, or a
+    page buffer at least as high as the span. One span needs one request; a second span would need a
+    second request after the first has ended (section 4.3). With a page
+    buffer (section 4.6), the buffer holds at least the tile rows of one
+    field: at a width of 240 pixels, fields of 32 pixels and 2 bits per
+    pixel, 1,920 bytes; a field is then drawn in one pass. The drawing code
+    draws all fields in each pass, and a pass keeps only the pixels of its
+    tile rows; the map entries of all fields are written in the first pass,
+    before it is sent. Alternatively each field has a CLUT entry of its
+    own: a focus change is then two CLUT writes, and the tile rows of the
+    two fields are sent again, without drawing when the bitmap holds the
+    whole screen; the 16 entries then limit the number of fields.
+25. The engine of variant 15 as built: a parameter BPP2 of the model, and
+    a bit BPP2 in CTRL, row layout only. A byte is 4 pixels of a pixel row,
+    the leftmost in bits 7:6; a tile is 2 bytes of a pixel row, at
+    FB_START + 2*c*, and a bitmap word holds 2 tiles. FB_START bit 0 is ignored, and
+    LINE_STRIDE is 2·TILE_COLS; the map steps LINE_STRIDE / 2 entries per
+    tile row, not LINE_STRIDE as at 1 bit per pixel. The CLUT is 128-byte
+    aligned, bit 6 of the CLUT register ignored, entry *idx* at CLUT +
+    8·*idx*. When the index changes, the fetch stage reads word 0 of the
+    entry, at {CLUT[31:7], *idx*, 0, 00}, and then word 1, at {CLUT[31:7],
+    *idx*, 1, 00}: at most 4 reads per tile and pixel row, a map word, two
+    CLUT words and a bitmap word. It splits the 16 bits of the tile: the
+    low bit of pixel *i*, counted from the left, to bit *i* of the low
+    bits, its high bit to bit *i* of the high bits; the high bits above the
+    last pixel inside W are cleared. The handoff register carries, beside
+    the 9 bits of variant 11 and the two colors of word 0, the 8 high bits
+    and the two colors of word 1. In the output stage, the low bits are in
+    the 9-bit shift register of variant 11, with its sentinel, which still
+    marks the end of the tile; the high bits are in a second 8-bit shift
+    register beside it, without a sentinel, shifted with it, by 1 bit per
+    pixel or by 2 for RGB444. Per pixel the high bit selects word 0 or word
+    1, and the low bit the halfword: bits 15:0 when 1, bits 31:16 when 0.
+    The second register is in the output stage only; in memory the 2 bits
+    of a pixel are side by side, not in two planes (variant 16). With BPP2
+    clear, word 1 is not read, the high bits are 0, and the engine works as
+    the 1-bit engine.
+    The color of pixel (*x*, *y*), with *t* and *idx* as in section 3:
+
+    ```
+    code  = (FB[y * 2 * TILE_COLS + x / 4] >> (6 - 2 * (x % 4))) & 3
+    word  = 32-bit word at CLUT + 8 * idx + 4 * (code >> 1)
+    color = code & 1 ? word bits 15:0 : word bits 31:16
+    ```
+
+    NO_MAP (variant 20) works as at 1 bit per pixel: the engine reads no
+    map, every tile uses entry 0, and the CLUT is then the two words of
+    entry 0. The reference implementation sets NO_MAP for the tiles of a
+    240×280 display below a screen of 240×240, which have no entry in the
+    tile map.
+    The additions are 82 flip-flops (section 4.4), 80 of
+    them the 8 high bits and word 1 in the handoff register and in the
+    output stage.
+26. Parts of the engine left out at build time. The tile layout (parameter
+    VERT) and 2 bits per pixel (parameter BPP2) are each in or out of the
+    synthesized engine. When one is left out, its bit in CTRL is ignored
+    and reads 0; software writes the bit and reads CTRL back to find out
+    whether the engine has it. 2 bits per pixel is only in the row layout:
+    in an engine with both layouts, a write of CTRL with VERT and BPP2 both
+    set leaves BPP2 at 0. Four
+    engines result (section 4.4): both layouts at 1 bit per pixel; both
+    layouts with 2 bits per pixel in the row layout; the row layout only,
+    for graphics libraries that draw in pixel rows; and the row layout only
+    with 2 bits per pixel.
+27. An icon switched off and on by its CLUT entry, without drawing. The
+    icon is drawn once, at startup, in tiles of its own, all with one CLUT
+    entry that no other tile uses. To switch it off, the CPU writes the
+    entry with the foreground equal to the background; to switch it on,
+    with a foreground that differs from the background. The bitmap does
+    not change; the next transfer shows the icon or not. Also with two
+    different pairs, lit and dim: a gauge of 11 segments, each segment in
+    three tile columns of its own with an entry of its own, a segment lit
+    or dim by one CLUT write (section 7). Per frame the CPU then writes the
+    changed entries and draws only the text and numbers that change.
+28. A color per character. A character that covers whole tiles and shares
+    no tile with its neighbors has a CLUT entry of its own, through the map
+    entries of its tiles. The glyphs are 8, 16, 24 or 32 pixels high and
+    wide, a 24×24 glyph 3×3 tiles; the font is monospaced, with an advance
+    of a multiple of 8, also for Latin letters and digits (8 or 16 pixels
+    wide, or a mixed string padded to a multiple of 8); the characters are
+    drawn at x and y multiples of 8, the top of the character cell on a
+    tile row (with text positioned on its baseline: ascent plus descent
+    equal to the glyph height); and the ink of each glyph is inside its
+    cell. At most 16 color pairs are on the screen at a time; a pair holds
+    for the whole tile, background included, so that a character with
+    another background shows as a colored box.
+29. Four unrelated colors in one tile, at 2 bits per pixel. The CPU writes
+    the four colors of an entry of variant 15 or 22, and they need not be
+    blends of two colors. In the reference implementation the bar of a
+    numeric field is a slider without a frame, in tiles with an entry of
+    its own: code 0 the screen color, code 1 the track, code 2 not drawn
+    (it has the track color), code 3 the indicator. The track is a box of
+    code 1 across the bar, 16 pixels high, and the indicator a box of code
+    3 over it, from the left end of the bar to the value. When the field
+    has the focus, or its value is being edited, the focus or edit entry of
+    variant 23 takes its tiles over.
+
+The following combination is one solution, built and run as a whole
+(section 7). The engine of variant 25, with 2 bits per pixel in the row
+layout, sends RGB444 over SPI to a 240×280 display, of which the screen is
+the upper 240×240 pixels. The codes of the pixels are in the coverage
+order of variant 22, with the blends of that variant. The CLUT has the 11
+entries of variant 23, of 64 bits, 128-byte aligned; the tile map is 450
+bytes; the bitmap is the whole screen, 14,400 bytes, or a page buffer of 4
+tile rows, 1,920 bytes. The menu shows its state by the tile map, with
+bands of tile rows, a focus entry, an edit entry and a button entry, and
+corner tiles with a quarter disc (variant 23). A numeric field has the
+slider of variant 29, in tiles with an entry of four colors of its own. On
+a focus change the CPU redraws and sends one span of tile rows, as one
+request per tile row (variant 24). The tile rows of the display below the
+screen are sent with NO_MAP (variant 25).
+
 ## 7. Reference implementation
 
 Software: the u8g2 graphics library with color drivers, branch `clut` of
@@ -676,7 +889,7 @@ including the bitmap and tile map, uses 8,384 bytes of heap.
 
 Hardware: a Verilog model of the engine (`rtl/clut_dma.v`), in the files
 accompanying this record and in
-`\mbox{\url{https://github.com/koendv/clut-dma}}`{=latex}, tag `v1.1`.
+`\mbox{\url{https://github.com/koendv/clut-dma}}`{=latex}, tag `v1.2`.
 The testbench converts the pixels of each request to the tile layout of
 u8g2, and compares the bytes from the model with the bytes from
 `u8x8_clut_stream_rgb565()` and `u8x8_clut_stream_rgb444()` of u8g2, in
@@ -689,6 +902,18 @@ Invariants of the state of the engine and of its memory and byte stream
 interfaces are proven by induction, and the APB3 and AHB-Lite adapters
 against APB3 and AHB-Lite properties, with SymbiYosys (files in
 `formal/`).
+
+2 bits per pixel (variants 15, 22 and 25) is built as the parameter BPP2
+of the model. u8g2 has no 2-bit format: the testbench takes the expected
+bytes from a C model of the engine, checked in two ways: a 2-bit bitmap
+with all high bits 0 gives the bytes of u8g2 for the same 1-bit bitmap
+and word 0 of the CLUT, and the byte 0x1b (codes 0, 1, 2, 3) gives the
+four colors of the entry in code order. The model, with 2 bits per pixel,
+passes 393 requests, the 258 above and 135 at 2 bits per pixel; built
+without the tile layout (VERT = 0, variant 26), it passes the 264
+requests in the row layout. The invariants are also proven with BPP2, and
+with BPP2 and without the tile layout. The tests and proofs also run
+without the kept words, a debug mode.
 
 The model also ran, unchanged, on an FPGA in two builds, each with an SPI
 to a 240×280 display (files in `fpga/`). In the first, a 32-bit ARMv6-M
@@ -721,6 +946,23 @@ SPI at 12 MHz, a frame in color takes 245 ms when the CPU expands the
 colors in software, 141 ms of which the CPU spends sending; and 171 ms
 with the engine, of which the CPU waits 70 ms for it.
 
+A menu in English and Chinese, anti-aliased at 2 bits per pixel, ran on
+both builds, with the model built with BPP2: the mui menu system of u8g2 over a minimal graphics layer
+for the 2-bit bitmap (files in `mui_2bpp/`), with the codes in coverage
+order (variant 22), the menu state as tile color (variant 23), partial
+update by tile rows (variant 24) and the slider of variant 29. The font
+is rendered at 24 pixels, rounded to the four codes; the checkboxes, radio
+buttons and status icons are glyphs. Whole 240×240 screens in RGB444,
+drawn and sent: on the ARM build, with SPI at 27 MHz and a full bitmap,
+14,978 bytes of display data, a screen takes 39.5 ms with the engine and
+102.3 ms when the CPU expands the colors, and a focus change to the next
+field, 8 tile rows, 13.1 ms. On the RISC-V build, with SPI at 12 MHz and
+a page buffer of 4 tile rows, 2,498 bytes of display data (1,920 bytes of
+bitmap, 450 of tile map and 128 of CLUT) and 3,428 bytes of RAM in all,
+with the variables and the stack, a screen takes 85.5 ms with the engine
+and 169.6 ms in software, and a focus change 24.9 ms; the program, code
+and data, is 25,976 bytes.
+
 The example of an auto gauge (`fpga/tang_nano_20k_arm/fw/async.c`) illustrates these
 techniques:
 
@@ -734,7 +976,7 @@ techniques:
 
 On a 54 MHz ARMv6-M, SPI at 27 MHz, 240×280 ST7789 display, a whole
 screen takes 29.9 ms to send. Measurements show a frame rate of 30 to 32
-frames per second; the CPU is busy 3.5 to 10 % of the time.
+frames per second; the CPU is busy 3.4 to 8.6 % of the time.
 
 ## 8. License
 
@@ -755,3 +997,15 @@ covenants not to assert it against any person or entity for making,
 having made, using, selling, offering for sale, or importing
 implementations of the methods disclosed in this document. This
 covenant binds the author and any successor in interest to such rights.
+
+## Versions
+
+This document is published on Zenodo. DOI 10.5281/zenodo.23835660 stands
+for all versions and resolves to the latest. Each version is public from
+its own date.
+
+- Version 1.0, 2026-10-31, DOI 10.5281/zenodo.23835661: variants 1 to 17.
+- Version 1.1, 2026-11-11, DOI 10.5281/zenodo.24144768: variants 18 to 21,
+  and the registers of section 4.1 in place of those of version 1.0.
+- Version 1.2, 2026-11-16, DOI 10.5281/zenodo.24289077, this document:
+  variants 22 to 29, and 2 bits per pixel as built.

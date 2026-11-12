@@ -9,10 +9,10 @@
 # built first, then the script waits for enter, to start a video recording.
 # It prints the time of each step, for cutting and captions.
 #
-# usage: ./demo.sh     TTY: the uart of the board, default /dev/ttyUSB1
+# usage: ./demo.sh     in the fw directory of the build (make demo);
+#                      TTY: the uart of the board, default /dev/ttyUSB1
 
 set -eu
-cd "$(dirname "$0")"
 TTY=${TTY:-/dev/ttyUSB1}
 
 t0=0

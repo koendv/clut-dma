@@ -26,7 +26,7 @@
 #define UART1_LSR       REG(0xF0200034)   /* bit 0 data ready, bit 5 THR empty */
 
 /* clut_dma, rtl/clut_dma.v, on the AHB slave port */
-#define DMA_CTRL        REG(0xE8000000)   /* bit 0 START, bits 2:1 FORMAT, bit 3 IRQ_EN, bit 4 VERT, bit 5 NO_MAP */
+#define DMA_CTRL        REG(0xE8000000)   /* bit 0 START, bits 2:1 FORMAT, bit 3 IRQ_EN, bit 4 VERT, bit 5 NO_MAP, bit 6 BPP2 */
 #define DMA_STATUS      REG(0xE8000004)   /* bit 0 BUSY, bit 1 DONE, bit 2 ERR (write 1 to clear) */
 #define DMA_FB_START    REG(0xE8000008)   /* bitmap: the first tile */
 #define DMA_MAP_START   REG(0xE800000C)   /* map: the byte of the first tile's entry */
@@ -43,6 +43,7 @@
 #define DMA_IRQ_EN 0x08u
 #define DMA_VERT   0x10u
 #define DMA_NO_MAP 0x20u
+#define DMA_BPP2   0x40u          /* 2 bits per pixel, clut_dma parameter BPP2 */
 
 /* spi_lcd, fpga/rtl/spi_lcd.v, on the APB slave port */
 #define SPI_DATA        REG(0xF8000040)

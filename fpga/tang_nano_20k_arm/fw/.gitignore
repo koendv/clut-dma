@@ -6,3 +6,5 @@ lib-m1/
 lib-host/
 obj-m1/
 obj-host/
+obj-mui2bpp/
+sim-mui2bpp/

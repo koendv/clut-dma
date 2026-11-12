@@ -9,7 +9,7 @@
     steps.txt  c XX: command, d XX: parameter, w x0 x1 y0 y1: window,
                m word value: fbmem write, before a request that needs it,
                r fmt fb_start map clut line_stride map_nibble size: request,
-               fmt bits 1:0 FORMAT, bit 2 VERT, bit 3 NO_MAP
+               fmt bits 1:0 FORMAT, bit 2 VERT, bit 3 NO_MAP, bit 4 BPP2
     names.txt  the name of each request
   usage: host [border | palette | clutcolor | clutclock | graphics | mui | stars | solder]
          stars: built with -DWITH_STARS and Adafruit GFX

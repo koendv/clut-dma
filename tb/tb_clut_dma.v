@@ -6,7 +6,11 @@
 // format tile_cols first w h fb_start map clut, hex; w and h in pixels), writes the received
 // bytes to out.txt, in the format of expected.txt written by ref.c.
 // format bits 1:0 FORMAT, bit 2 the vertical layout (CTRL bit 4), bit 3 NO_MAP
-// (CTRL bit 5).
+// (CTRL bit 5), bit 4 2 bits per pixel (CTRL bit 6).
+//
+// parameter BPP2 (iverilog -P tb_clut_dma.BPP2=1): clut_dma with 2 bits per
+// pixel, for the tests of ref bpp2. VERT = 0 (-P tb_clut_dma.VERT=0): without
+// the vertical layout, for the tests of ref lvgl.
 //
 // parameter CACHE (iverilog -P tb_clut_dma.CACHE=0): the engine without
 // cache, 3 memory reads per tile and pixel row; vertical: 4.
@@ -25,6 +29,8 @@
 module tb_clut_dma;
 
   parameter CACHE = 1;
+  parameter BPP2  = 0;
+  parameter VERT  = 1;
 
   reg         clk = 0;
   reg         rst_n = 0;
@@ -46,7 +52,7 @@ module tb_clut_dma;
   reg         rd_ack = 0;
   reg  [31:0] rd_data = 0;
 
-  clut_dma #(.CACHE(CACHE)) dut (
+  clut_dma #(.CACHE(CACHE), .BPP2(BPP2), .VERT(VERT)) dut (
     .clk(clk), .rst_n(rst_n),
     .reg_wr(reg_wr), .reg_rd(reg_rd), .reg_addr(reg_addr),
     .reg_wdata(reg_wdata), .reg_rdata(reg_rdata),
@@ -99,7 +105,7 @@ module tb_clut_dma;
     .hready(m_hready), .hrdata(m_hrdata), .hresp(m_hresp)
   );
 
-  clut_dma #(.CACHE(CACHE)) dut (
+  clut_dma #(.CACHE(CACHE), .BPP2(BPP2), .VERT(VERT)) dut (
     .clk(clk), .rst_n(rst_n),
     .reg_wr(reg_wr), .reg_rd(reg_rd), .reg_addr(reg_addr),
     .reg_wdata(reg_wdata), .reg_rdata(reg_rdata),
@@ -345,13 +351,13 @@ module tb_clut_dma;
       wr_reg(5'h08, fb);
       wr_reg(5'h0C, map + first / 2);
       wr_reg(5'h10, clut);
-      wr_reg(5'h14, fmt[2] ? 8 * tile_cols : tile_cols);   // LINE_STRIDE
+      wr_reg(5'h14, fmt[2] ? 8 * tile_cols : fmt[4] ? 2 * tile_cols : tile_cols);   // LINE_STRIDE
       wr_reg(5'h18, first & 1);                            // MAP_NIBBLE
       wr_reg(5'h1C, { 4'd0, h[11:0], 4'd0, w[11:0] });     // SIZE
       req_started = 0;
       req_bytes = 0;
       req_reads = 0;
-      wr_reg(5'h00, { 26'd0, fmt[3:2], 1'b1, fmt[1:0], 1'b1 });   // NO_MAP, VERT, IRQ_EN, FORMAT, START
+      wr_reg(5'h00, { 25'd0, fmt[4:2], 1'b1, fmt[1:0], 1'b1 });   // BPP2, NO_MAP, VERT, IRQ_EN, FORMAT, START
 
       // wait for the interrupt. 64 pixels per tile, at most 3 bytes per pixel
       limit = w * h * (3 * (spi ? spi : 8) + 16) + 2000;   // at most 3 bytes per pixel
@@ -365,10 +371,10 @@ module tb_clut_dma;
         $finish;
       end
       // memory reads, as computed by ref.c. without cache: 3 per tile and
-      // pixel row; vertical: map, clut and 2 or 3 bitmap words
+      // pixel row; vertical: map, clut and 2 bitmap words; 2 bpp: 2 clut words
       if (reads != 0 && $fscanf(reads, "%d\n", exp_reads) == 1) begin
         if (!CACHE)
-          exp_reads = ((fmt[2] ? 4 : 3) - fmt[3]) * ((w + 7) / 8) * h;
+          exp_reads = ((fmt[2] ? 4 : 3) + fmt[4] - fmt[3]) * ((w + 7) / 8) * h;
         if (req_reads != exp_reads) begin
           $display("error: test %0d: %0d memory reads, expected %0d", t, req_reads, exp_reads);
           errors = errors + 1;
@@ -384,7 +390,8 @@ module tb_clut_dma;
       // pixel row. at the end: the start of the last line
       if (w != 0 && h != 0) begin
         rd_reg(5'h08, status);
-        if (status != (fmt[2] ? fb + 8 * ((h - 1) / 8) * tile_cols : fb + (h - 1) * tile_cols)) begin
+        if (status != (fmt[2] ? fb + 8 * ((h - 1) / 8) * tile_cols
+                              : fb + (h - 1) * (fmt[4] ? 2 : 1) * tile_cols)) begin
           $display("error: test %0d: FB_START %h at the end", t, status);
           errors = errors + 1;
         end

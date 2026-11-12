@@ -102,8 +102,8 @@ module clut_fabric (
     .reg_wdata(reg_wdata), .reg_rdata(reg_rdata)
   );
 
-  // fbmem: no bus errors
-  clut_dma dma (
+  // fbmem: no bus errors. BPP2: also 2 bits per pixel (fw/mui2bpp.c)
+  clut_dma #(.BPP2(1)) dma (
     .clk(clk), .rst_n(rst_n),
     .reg_wr(reg_wr), .reg_rd(reg_rd), .reg_addr(reg_addr),
     .reg_wdata(reg_wdata), .reg_rdata(reg_rdata),

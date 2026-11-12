@@ -56,6 +56,8 @@ job() {
 # simulation
 job test         30m "make test U8G2=$u8g2"
 job test-nocache 30m "make test-nocache U8G2=$u8g2"
+job test-bpp2    30m "make test-bpp2 U8G2=$u8g2"
+job test-lvgl    30m "make test-lvgl U8G2=$u8g2"
 job ahb          30m "make ahb U8G2=$u8g2"
 job fabric       1h  "make fabric U8G2=$u8g2"
 job measure      4h  "make -s measure U8G2=$u8g2 WAIT_STATES='0 1 2 4 8 16 24 32' > measure.out 2>&1; cat measure.out; ! grep -q '^output differs\|, [1-9][0-9]* errors' measure.out"
@@ -77,6 +79,7 @@ job sim          2h  "cd fpga/tang_nano_20k_arm/fw && make sim U8G2=$u8g2 && for
 job formal       1h  "make formal"
 job fbmem-big    4h  "cd formal && sby -f fbmem.sby prove_big cover_big"
 job formal-vert  3h  "cd formal && sby -f clut_dma.sby cover_vert cover_vert0"
+job formal-bpp2  3h  "cd formal && sby -f clut_dma.sby cover_b2 cover0_b2 cover_lvgl"
 
 echo "done $(date +%Y%m%d-%H%M)" >> "$summary"
 cat "$summary"

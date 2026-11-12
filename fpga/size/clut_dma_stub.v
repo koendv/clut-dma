@@ -6,7 +6,8 @@
 // this stub, against the whole design.
 
 module clut_dma #(
-  parameter CACHE = 1
+  parameter CACHE = 1,
+  parameter BPP2  = 0
 ) (
   input         clk,
   input         rst_n,

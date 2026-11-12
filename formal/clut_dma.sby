@@ -3,6 +3,11 @@
 # sby -f clut_dma.sby: the proofs and the covers of the horizontal layout,
 # tagged default. the covers of the vertical layout take long, for nightly.sh:
 # sby -f clut_dma.sby cover_vert cover_vert0
+# 2 bits per pixel (BPP2 = 1), tasks *_b2: the proofs tagged default; the
+# covers of the 1-bit horizontal layout and of 2 bpp for nightly.sh:
+# sby -f clut_dma.sby cover_b2 cover0_b2
+# no vertical layout, 2 bpp (VERT = 0, BPP2 = 1): prove_lvgl tagged default,
+# cover_lvgl for nightly.sh
 
 [tasks]
 prove         cache1 prove default
@@ -11,6 +16,12 @@ cover         cache1 cover rowcov default
 cover0        cache0 cover rowcov default
 cover_vert    cache1 cover vertcov
 cover_vert0   cache0 cover vertcov
+prove_b2      cache1 bpp2 prove default
+prove0_b2     cache0 bpp2 prove default
+cover_b2      cache1 bpp2 cover rowcov b2cov
+cover0_b2     cache0 bpp2 cover rowcov b2cov
+prove_lvgl    cache1 bpp2 novert prove default
+cover_lvgl    cache1 bpp2 novert cover rowcov b2cov
 
 [options]
 prove: mode prove
@@ -25,8 +36,11 @@ cover: smtbmc yices
 [script]
 rowcov: read -define ROW_COVER
 vertcov: read -define VERT_COVER
+b2cov: read -define BPP2_COVER
 read -formal clut_dma.v
 cache0: chparam -set CACHE 0 clut_dma
+bpp2: chparam -set BPP2 1 clut_dma
+novert: chparam -set VERT 0 clut_dma
 prep -top clut_dma
 
 [files]

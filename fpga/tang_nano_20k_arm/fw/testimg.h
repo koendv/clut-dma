@@ -69,6 +69,9 @@ extern "C" {
 /* clut_dma CTRL NO_MAP, here in bit 3 of the format: no tile map, every
    tile clut entry 0 */
 #define FMT_NOMAP  8u
+/* clut_dma CTRL BPP2, here in bit 4 of the format: 2 bits per pixel,
+   horizontal layout, clut entries of 64 bits */
+#define FMT_BPP2   16u
 
 /* a step of a test. REQ: a clut_dma request of w x h pixels at tile (tx, ty)
    in format fmt, with the clut at offset clut. COLMOD: the display color
@@ -134,7 +137,7 @@ void solder_tick(unsigned steps);
 int  solder_key(char key);
 void solder_frame(void);           /* the screen shown, again */
 
-/* the auto gauge, async.c: the whole screen in one clut_dma request,
+/* the speed gauge, async.c: the whole screen in one clut_dma request,
    interrupt driven. async_frame: sleeps until the last frame is sent,
    updates the changes, starts the next send, returns while it is sent.
    async_stats: FPS and CPU %, smoothed, in tenths */

@@ -20,6 +20,7 @@ Gowin GoRV32 (based on VexRiscv, no caches) at 24 MHz, with 32 KiB On-Chip RAM f
 clut_dma reads from On-Chip RAM through the AHB master port of GoRV32, with `rtl/ahb_rd_master.v`; the CPU and clut_dma share that RAM.
 `rtl/clut_fabric_ahb.v` connects clut_dma and spi_lcd to the three ports.
 The clut_dma interrupt is on EXT_INT[0].
+clut_dma is built with the parameter BPP2, also 2 bits per pixel: logic 8,905 of 20,736 (43 %, 8,810 without), hclk 24 MHz, Fmax 27.6 MHz.
 
 The firmware is loaded into On-Chip RAM over JTAG and started at 0x40000000 (`openocd`, `rv.cfg`, standard RISC-V debug 0.13).
 
@@ -31,7 +32,7 @@ These are limits of the soft core on this FPGA, not of clut_dma:
   The build runs at 24 MHz (27 MHz × 8 / 9) and the SPI at 12 MHz; a whole screen in RGB444 takes about twice as long as on the ARM build.
 - RAM: the 64 KB On-Chip RAM configuration of GoRV32 is faulty: a byte store at times lands one word (4 bytes) further.
   The 32 KB configuration is correct, so program, data and frame buffer share 32 KiB.
-- The firmware uses compressed instructions (rv32imc); with them, the graphics and mui demos fit in 32 KiB.
+- The firmware uses compressed instructions (rv32imc); with them, the graphics and mui demos fit in 32 KiB, and the mui_2bpp menu with a page buffer.
 
 ## Wiring
 
@@ -92,9 +93,13 @@ make clutclock     # u8g2 ClutClock, an analog clock
 make graphics      # u8g2 demo_graphics, the GraphicsTest pages
 make mui           # u8g2 demo_mui, a menu; keys over the uart
 make stars         # Adafruit GFX falling stars, 1 bpp, row layout
-make solder        # soldering station, 24x24 Chinese, see below
-make async         # the auto gauge of the ARM build, interrupt driven, see below
-make demo-solder   # the same with keys over the uart, for a video, as in the ARM build
+make solder        # soldering station, 24×24 Chinese, see below
+make async         # the speed gauge of the ARM build, interrupt driven, see below
+make mui2bpp       # mui_2bpp, 2 bits per pixel, a page buffer, see below
+make demo          # the examples one after the other, then a walk through the
+                   # menu with keys over the uart; waits for enter, for a video
+make demo-solder   # the soldering station with keys over the uart, for a video, as in the ARM build
+make demo-menu     # the anti-aliased menu with keys over the uart, for a video, as in the ARM build
 make term          # serial terminal on UART1, /dev/ttyUSB1, 115200 baud
 ```
 
@@ -131,10 +136,29 @@ CPU time for sending: as on the [ARM build](../tang_nano_20k_arm/README.md#solde
 - The drawing time varies by a few ms with what is on the screen; the figures are from one run.
 - The stack has the rest of the RAM; the linker keeps at least 1 KiB free (`rv.ld`). The highest stack measured: 504 bytes with clut_dma, 788 with `USE_CLUT_DMA=0`, both with the menu.
 
-## Auto gauge demo
+## Anti-aliased menu demo
 
-The auto gauge of the [ARM build](../tang_nano_20k_arm/README.md#auto-gauge-demo), the same `async.c`: the whole screen in one clut_dma request, the CPU asleep while it is sent.
-14 frames per second: the send of a whole screen takes 67.2 ms at 12 MHz. CPU 3.5 to 6 %.
+The menu of the [ARM build](../tang_nano_20k_arm/README.md#anti-aliased-menu-demo), the same `mui2bpp.c` and `u8x8_clut_dma_2bpp.c`, keys and `USE_CLUT_DMA`.
+With `__riscv`, `mui2bpp.c` uses UART1 and `mcycle`, and keeps the buffer, the tile map and the CLUT in On-Chip RAM; clut_dma reads them over AHB.
+The whole bitmap, 14,400 bytes, does not fit beside the program: a page buffer of `MUI2_PAGE_ROWS` tile rows, default 4, the height of a field, 1,920 bytes; mui draws the form once per page, 8 times per screen.
+
+Measured with key `b`: GoRV32 at 24 MHz, SPI at 12 MHz, 240×240 in RGB444, a page buffer of 4 tile rows, a whole screen drawn and sent.
+RAM for the display: the buffer, the tile map and the CLUT.
+
+| variant | RAM for the display | per screen | program in On-Chip RAM |
+|---|---|---|---|
+| software | 2,498 bytes | 169.6 ms | 27,300 bytes |
+| clut_dma | 2,498 bytes | 85.5 ms | 26,988 bytes |
+
+- Sending a whole screen: 86,400 bytes of pixels, 57.6 ms at 12 MHz. With clut_dma the rest is drawing, 8 pages. A focus change draws and sends only the tile rows of the two fields: the next field is 8 tile rows, two pages.
+- A focus change to the next field: 8 tile rows, 24.9 ms (`make -B mui2bpp STATS=1`, key `f`, as in the ARM build).
+- The program: code, data and variables; the stack has the rest of the 32 KiB, at least 1 KiB (`rv.ld`).
+- RAM and stack of the menu, measured on both boards: [mui_2bpp](../../mui_2bpp/README.md#ram).
+
+## Speed gauge demo
+
+The speed gauge of the [ARM build](../tang_nano_20k_arm/README.md#speed-gauge-demo), the same `async.c`: the whole screen in one clut_dma request, the CPU asleep while it is sent.
+14 frames per second: sending a whole screen takes 67.2 ms at 12 MHz. CPU 3.5 to 6.2 %.
 
 clut_dma is source 12 of the PLIC (`EXT_INT[0]`, GP0 of the GoRV32 SDK).
 Interrupts stay off (`mstatus.MIE` 0): `wfi` wakes on the pending interrupt, and the wait loop claims it, clears clut_dma and completes it.

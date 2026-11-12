@@ -19,17 +19,43 @@ test-nocache: $(BUILD)/ref $(BUILD)/sim_nocache
 	cmp $(BUILD)/nocache/expected.txt $(BUILD)/nocache/out.txt
 	@echo PASS
 
+# 2 bits per pixel, clut_dma parameter BPP2 = 1, with and without cache: the
+# tests of make test, then the 2 bpp tests of ref bpp2
+test-bpp2: $(BUILD)/ref $(BUILD)/sim_bpp2 $(BUILD)/sim_bpp2_nocache
+	mkdir -p $(BUILD)/bpp2
+	cd $(BUILD)/bpp2 && ../ref bpp2
+	cd $(BUILD)/bpp2 && vvp -n ../sim_bpp2 | tee sim.log
+	grep -q ' 0 errors' $(BUILD)/bpp2/sim.log
+	cmp $(BUILD)/bpp2/expected.txt $(BUILD)/bpp2/out.txt
+	cd $(BUILD)/bpp2 && vvp -n ../sim_bpp2_nocache | tee sim0.log
+	grep -q ' 0 errors' $(BUILD)/bpp2/sim0.log
+	cmp $(BUILD)/bpp2/expected.txt $(BUILD)/bpp2/out.txt
+	@echo PASS
+
+# without the vertical layout, 2 bits per pixel (VERT = 0, BPP2 = 1): the
+# engine for libraries that draw in the horizontal layout, such as LVGL.
+# the horizontal tests of make test and the 2 bpp tests
+test-lvgl: $(BUILD)/ref $(BUILD)/sim_lvgl
+	mkdir -p $(BUILD)/lvgl
+	cd $(BUILD)/lvgl && ../ref lvgl
+	cd $(BUILD)/lvgl && vvp -n ../sim_lvgl | tee sim.log
+	grep -q ' 0 errors' $(BUILD)/lvgl/sim.log
+	cmp $(BUILD)/lvgl/expected.txt $(BUILD)/lvgl/out.txt
+	@echo PASS
+
 # spi underrun: whole screens, spi P cycles per byte, W memory wait states
 SPI_CYCLES = 8 16 32
 # external memory, e.g. PSRAM over QSPI: make measure WAIT_STATES="16 24 32"
 WAIT_STATES = 0 1 2 4 8 16
 
-# whole screens, and a rectangle 1 tile wide on a 320x240 display
-measure: $(BUILD)/ref $(BUILD)/sim
-	for m in measure narrow vmeasure; do \
+# whole screens, a rectangle 1 tile wide on a 320x240 display, whole screens
+# in vertical layout, and whole screens in 2 bpp (sim_bpp2)
+measure: $(BUILD)/ref $(BUILD)/sim $(BUILD)/sim_bpp2
+	for m in measure narrow vmeasure bmeasure; do \
+	  s=sim; [ $$m = bmeasure ] && s=sim_bpp2; \
 	  mkdir -p $(BUILD)/$$m && (cd $(BUILD)/$$m && ../ref $$m) && \
 	  for p in $(SPI_CYCLES); do for w in $(WAIT_STATES); do \
-	    (cd $(BUILD)/$$m && echo "$$m: `vvp -n ../sim +spi=$$p +ws=$$w | grep -E 'measure|errors' | tr '\n' ' '`" && \
+	    (cd $(BUILD)/$$m && echo "$$m: `vvp -n ../$$s +spi=$$p +ws=$$w | grep -E 'measure|errors' | tr '\n' ' '`" && \
 	     cmp -s expected.txt out.txt || echo "output differs: $$m spi $$p ws $$w"); \
 	  done; done; \
 	done
@@ -38,6 +64,9 @@ measure: $(BUILD)/ref $(BUILD)/sim
 lint:
 	verilator --lint-only -Wall rtl/clut_dma.v
 	verilator --lint-only -Wall -GCACHE=0 rtl/clut_dma.v
+	verilator --lint-only -Wall -GBPP2=1 rtl/clut_dma.v
+	verilator --lint-only -Wall -GBPP2=1 -GCACHE=0 rtl/clut_dma.v
+	verilator --lint-only -Wall -GBPP2=1 -GVERT=0 rtl/clut_dma.v
 	verilator --lint-only -Wall --top-module clut_fabric $(FABRIC_RTL)
 	verilator --lint-only -Wall fpga/tang_nano_20k_arm/rtl/apb_reg_slave.v
 	verilator --lint-only -Wall fpga/tang_nano_20k_riscv/rtl/ahb_reg_slave.v
@@ -73,13 +102,16 @@ $(BUILD)/fabric_sim: $(FABRIC_RTL) fpga/tb/tb_fabric.v
 	mkdir -p $(BUILD)
 	iverilog -g2005 -Wall -o $@ $^
 
-# size of clut_dma in gate equivalents, CACHE = 1 and 0: yosys to generic
-# gates, weights in tb/ge.awk (clut-dma.md section 4.4)
+# size of clut_dma in gate equivalents, CACHE = 1 and 0, then with 2 bpp
+# (BPP2 = 1), and with 2 bpp without the vertical layout (VERT = 0): yosys to
+# generic gates, weights in tb/ge.awk (clut-dma.md section 4.4)
+SIZE_CONFIGS = CACHE=1 CACHE=0 CACHE=1,BPP2=1 CACHE=1,BPP2=1,VERT=0
+
 size:
 	mkdir -p $(BUILD)
-	for c in 1 0; do \
-	  yosys -q -p "read_verilog rtl/clut_dma.v; chparam -set CACHE $$c clut_dma; synth -top clut_dma; tee -o $(BUILD)/size$$c.txt stat" > /dev/null && \
-	  echo "CACHE=$$c: `awk -f tb/ge.awk $(BUILD)/size$$c.txt`"; \
+	for c in $(SIZE_CONFIGS); do \
+	  yosys -q -p "read_verilog rtl/clut_dma.v; chparam `echo $$c | sed 's/\([A-Z0-9]*\)=\([0-9]\)/-set \1 \2/g; s/,/ /g'` clut_dma; synth -top clut_dma; tee -o $(BUILD)/size-$$c.txt stat" > /dev/null && \
+	  echo "$$c: `awk -f tb/ge.awk $(BUILD)/size-$$c.txt`"; \
 	done
 
 # formal proofs and covers with SymbiYosys, the short tasks (minutes).
@@ -135,7 +167,19 @@ $(BUILD)/sim_nocache: rtl/clut_dma.v tb/tb_clut_dma.v
 	mkdir -p $(BUILD)
 	iverilog -g2005 -Wall -P tb_clut_dma.CACHE=0 -o $@ $^
 
+$(BUILD)/sim_bpp2: rtl/clut_dma.v tb/tb_clut_dma.v
+	mkdir -p $(BUILD)
+	iverilog -g2005 -Wall -P tb_clut_dma.BPP2=1 -o $@ $^
+
+$(BUILD)/sim_bpp2_nocache: rtl/clut_dma.v tb/tb_clut_dma.v
+	mkdir -p $(BUILD)
+	iverilog -g2005 -Wall -P tb_clut_dma.BPP2=1 -P tb_clut_dma.CACHE=0 -o $@ $^
+
+$(BUILD)/sim_lvgl: rtl/clut_dma.v tb/tb_clut_dma.v
+	mkdir -p $(BUILD)
+	iverilog -g2005 -Wall -P tb_clut_dma.BPP2=1 -P tb_clut_dma.VERT=0 -o $@ $^
+
 clean:
 	rm -rf $(BUILD)
 
-.PHONY: test test-nocache ahb measure size formal fabric lint pdf zip binzip clean
+.PHONY: test test-nocache test-bpp2 test-lvgl ahb measure size formal fabric lint pdf zip binzip clean

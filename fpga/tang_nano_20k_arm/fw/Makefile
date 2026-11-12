@@ -16,11 +16,22 @@
 #                   of PAGE_ROWS tile rows (default 2), black and white.
 #                   COLOR=1: a tile map and a clut. USE_CLUT_DMA=0: the cpu
 #                   expands the colors, no clut_dma. key b: a benchmark
-#   make async   an auto gauge: the whole screen in one clut_dma request,
+#   make async   a speed gauge: the whole screen in one clut_dma request,
 #                interrupt driven, the cpu asleep while it is sent (async.c)
 #   make demo-solder  solder with keys over the uart, for a video
 #                   (solder_demo.sh). OPTS: the build options of make solder,
 #                   default COLOR=1; OPTS= for black and white
+#   make demo-menu  the anti-aliased menu with keys over the uart, for a
+#                   video (mui2bpp_demo.sh). MENU_OPTS: the build options of
+#                   make mui2bpp, default STATS=1
+#   make mui2bpp    mui_2bpp: the menu of ../../../mui_2bpp, 2 bits per
+#                   pixel, anti-aliased, English and Chinese, keys on UART0
+#                   (mui2bpp.c). USE_CLUT_DMA=0: the cpu expands the colors.
+#                   key b: a benchmark. STATS=1: tile rows and time per
+#                   key, key f: a benchmark of a focus change
+#   make sim-mui2bpp  mui_2bpp in the simulation, the cpu expanding the colors
+#                   and clut_dma: sim-mui2bpp/{cpu,dma}/frame_NN.png, and the
+#                   bytes sent to the display compared, they must be the same
 #   make sim     the image the display ought to show, from a simulation of the
 #                RTL: sim/frame_NN.png per request, sim/final.png.
 #                make sim TEST=border, palette, clutcolor, clutclock, graphics, mui, stars
@@ -58,6 +69,10 @@ SIMDEFS += -DUSE_CLUT_DMA
 endif
 ifdef COLOR
 CFLAGS += -DSOLDER_COLOR
+endif
+# make mui2bpp STATS=1: tile rows and time per key, key f (mui2bpp.c)
+ifdef STATS
+CFLAGS += -DMUI2_STATS
 endif
 # u8g2 page buffer of ClutClock, demo_graphics and demo_mui: make PAGE_ROWS=1 clutclock,
 # 1 or 2 tile rows; default the full screen
@@ -127,13 +142,53 @@ solder.elf: $(FW_DEP) $(SOLDER_SRC)
 	$(CC) $(CFLAGS) $(U8G2_DEFS) -DSOLDER_TEST -o $@ $(FW_SRC) $(SOLDER_SRC) $(LDFLAGS) lib-m1/libu8g2.a -lc -lgcc
 	$(CROSS)size $@
 
-# the auto gauge: one request per screen, interrupt driven
+# the speed gauge: one request per screen, interrupt driven
 async.elf: $(FW_DEP) async.c
 	$(CC) $(CFLAGS) $(U8G2_DEFS) -DASYNC_TEST -o $@ $(FW_SRC) async.c $(LDFLAGS) lib-m1/libu8g2.a -lc -lgcc
 	$(CROSS)size $@
 
 scl lcd border palette clutcolor clutclock graphics mui stars solder async: %: %.elf
 	$(OPENOCD) -f ../m1.cfg -c "init; m1_run $<; shutdown"
+
+# mui_2bpp: its own u8g2.h, not the u8g2 of the other demos. The copies of
+# u8x8 and mui without warnings, as libu8g2.a; the pixels from clut_dma
+# (u8x8_clut_dma_2bpp.c) or the cpu (mui_2bpp/src/u8x8_clut_2bpp.c)
+MUI2      = ../../../mui_2bpp
+MUI2_DEFS = -DU8X8_WITH_CLUT -DMUI_U8G2_GRID=8 -I$(MUI2)/src -I$(MUI2)/u8x8 -I$(MUI2)/mui -I$(MUI2)/demo \
+	$(if $(PAGE_ROWS),-DU8G2_PAGE_ROWS=$(PAGE_ROWS))
+MUI2_COPY = $(addprefix $(MUI2)/,u8x8/u8x8_setup.c u8x8/u8x8_display.c u8x8/u8x8_cad.c \
+	u8x8/u8x8_byte.c u8x8/u8x8_gpio.c u8x8/u8x8_d_st7789.c u8x8/u8x8_u8toa.c mui/mui.c mui/mui_u8g2.c)
+MUI2_SRC  = $(addprefix $(MUI2)/,src/u8g2_2bpp.c src/u8g2_button.c src/u8g2_circle.c demo/menu.c demo/forms_en.c \
+	demo/forms_zh.c demo/font_noto_sc_24.c demo/font_icons_20.c demo/font_controls_28.c)
+MUI2_HDR  = $(wildcard $(MUI2)/src/*.h $(MUI2)/u8x8/*.h $(MUI2)/mui/*.h $(MUI2)/demo/*.h) mui2bpp.h hw.h
+MUI2_CPU  = $(MUI2)/src/u8x8_clut_2bpp.c
+
+mui2bpp.elf: start.c mui2bpp.c u8x8_clut_dma_2bpp.c $(MUI2_SRC) $(MUI2_COPY) $(MUI2_CPU) $(MUI2_HDR) m1.ld
+	rm -rf obj-mui2bpp && mkdir -p obj-mui2bpp
+	cd obj-mui2bpp && $(CC) $(filter-out -Wall -Wextra,$(CFLAGS)) -w $(MUI2_DEFS:-I../%=-I../../%) \
+	  -c $(addprefix ../,$(MUI2_COPY))
+	$(CC) $(CFLAGS) $(MUI2_DEFS) -o $@ start.c mui2bpp.c \
+	  $(if $(filter 1,$(USE_CLUT_DMA)),u8x8_clut_dma_2bpp.c,$(MUI2_CPU)) $(MUI2_SRC) \
+	  obj-mui2bpp/*.o $(LDFLAGS) -lc -lgcc
+	$(CROSS)size $@
+
+mui2bpp: mui2bpp.elf
+	$(OPENOCD) -f ../m1.cfg -c "init; m1_run $<; shutdown"
+
+# mui_2bpp in the simulation, twice: the cpu expands the colors (d steps) and
+# clut_dma (r steps, BPP2); the bytes to the display must be the same
+sim-mui2bpp: sim_mui2bpp.c $(MUI2_SRC) $(MUI2_COPY) $(MUI2_CPU) $(MUI2_HDR) ../../tb/tb_frame.v ../../tb/st7789.py
+	for v in cpu dma; do \
+	  rm -rf sim-mui2bpp/$$v && mkdir -p sim-mui2bpp/$$v && \
+	  $(HOSTCC) -O2 $(MUI2_DEFS) -I. $$(test $$v = dma && echo -DUSE_CLUT_DMA) -o sim-mui2bpp/$$v/host \
+	    sim_mui2bpp.c $(MUI2_SRC) $(MUI2_COPY) $$(test $$v = cpu && echo $(MUI2_CPU)) && \
+	  (cd sim-mui2bpp/$$v && ./host && \
+	    $(IVERILOG) -g2005 -Wall -o tb_frame ../../../../tb/tb_frame.v $(addprefix ../,$(SIMRTL)) && \
+	    $(VVP) -n tb_frame > vvp.log && \
+	    python3 ../../../../tb/st7789.py spi.txt . names.txt) || exit 1; \
+	done
+	cmp sim-mui2bpp/cpu/spi.txt sim-mui2bpp/dma/spi.txt && \
+	  echo "sim-mui2bpp: clut_dma sends the same bytes as the cpu"
 
 # simulation: host.c writes fbmem and the steps of the test, tb_frame.v runs
 # them through clut_fabric, st7789.py draws the spi bytes
@@ -154,6 +209,7 @@ ifeq ($(TEST),solder)
 SIMDEFS += -DSOLDER_TEST $(filter -DSOLDER_% -DPAGE_ROWS=%,$(CFLAGS))
 SIMSRC   = solder.c font/u8g2_font_gb24st_t_solder.c
 endif
+
 
 obj-host/Adafruit_GFX.o: $(ADAFRUIT_GFX)/Adafruit_GFX.cpp $(GFX_HDR)
 	mkdir -p obj-host
@@ -189,6 +245,11 @@ OPTS ?= COLOR=1
 demo-solder:
 	OPTS='$(OPTS)' TTY='$(TTY)' ./solder_demo.sh
 
+# the anti-aliased menu with keys over the uart, for a video
+MENU_OPTS ?= STATS=1
+demo-menu:
+	OPTS='$(MENU_OPTS)' TTY='$(TTY)' ./mui2bpp_demo.sh
+
 term:
 	minicom -D $(TTY) -b 115200
 
@@ -199,4 +260,4 @@ clean:
 distclean: clean
 	rm -rf lib-m1 lib-host obj-m1 obj-host
 
-.PHONY: demo demo-solder sim scl lcd border palette clutcolor clutclock graphics mui stars solder bit load term clean distclean
+.PHONY: demo demo-solder sim scl lcd border palette clutcolor clutclock graphics mui stars solder async bit load term clean distclean
