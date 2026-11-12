@@ -242,7 +242,9 @@ CPU time for sending: the time per frame the CPU spends sending the picture, eve
 ![The auto gauge at 194 km/h, landscape](../../fig/async.png)
 
 An auto gauge (`fw/async.c`, `make async`): the whole screen in one clut_dma request, interrupt driven; the CPU sleeps while the screen is sent.
+
 Adapted from 06-Auto-Guage of [nishad2m8/T-Display-S3-YT](https://github.com/nishad2m8/T-Display-S3-YT), an LVGL gauge on a LilyGO T-Display S3; here in 1 bpp with colors per tile, drawn with u8g2, in landscape, 280×240 (MADCTL with MV, `ASYNC_MADCTL`; only this demo).
+
 The image: fbmem read from the board, at twice the size, as clut_dma sends it (here the RISC-V build).
 
 The CLUT does the animation.

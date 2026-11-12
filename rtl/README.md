@@ -228,9 +228,8 @@ Tests of `clut_dma.v`:
 - `fpga/size/`: stubs of clut_dma and clut_fabric, for `size.sh`.
 - `fpga/tb/`: tests of the fabric and of the firmware, above.
 - `nightly.sh`: the overnight tests, on a snapshot of the last commit.
-- `clut-dma.pdf`: the publication, v1.0, as on Zenodo. `clut-dma.md`: the
-  working draft of v1.1. `fig/`: its two figures, SVG, and two frames of
-  the soldering station demo, PNG.
+- `clut-dma.pdf`: the publication, as on Zenodo. `clut-dma.md`: its source.
+  `fig/`: its two figures, SVG, and two frames of the soldering station demo, PNG.
 
 ## Requirements
 
