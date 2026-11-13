@@ -16,7 +16,7 @@
 #                   of PAGE_ROWS tile rows (default 2), black and white.
 #                   COLOR=1: a tile map and a clut. USE_CLUT_DMA=0: the cpu
 #                   expands the colors, no clut_dma. key b: a benchmark
-#   make async   an auto gauge: the whole screen in one clut_dma request,
+#   make async   a speed gauge: the whole screen in one clut_dma request,
 #                interrupt driven, the cpu asleep while it is sent (async.c)
 #   make demo-solder  solder with keys over the uart, for a video
 #                   (solder_demo.sh). OPTS: the build options of make solder,
@@ -127,7 +127,7 @@ solder.elf: $(FW_DEP) $(SOLDER_SRC)
 	$(CC) $(CFLAGS) $(U8G2_DEFS) -DSOLDER_TEST -o $@ $(FW_SRC) $(SOLDER_SRC) $(LDFLAGS) lib-m1/libu8g2.a -lc -lgcc
 	$(CROSS)size $@
 
-# the auto gauge: one request per screen, interrupt driven
+# the speed gauge: one request per screen, interrupt driven
 async.elf: $(FW_DEP) async.c
 	$(CC) $(CFLAGS) $(U8G2_DEFS) -DASYNC_TEST -o $@ $(FW_SRC) async.c $(LDFLAGS) lib-m1/libu8g2.a -lc -lgcc
 	$(CROSS)size $@

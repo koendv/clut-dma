@@ -92,9 +92,9 @@ make clutclock     # u8g2 ClutClock, an analog clock
 make graphics      # u8g2 demo_graphics, the GraphicsTest pages
 make mui           # u8g2 demo_mui, a menu; keys over the uart
 make stars         # Adafruit GFX falling stars, 1 bpp, row layout
-make solder        # soldering station, 24x24 Chinese, see below
-make async         # the auto gauge of the ARM build, interrupt driven, see below
-make demo-solder   # the same with keys over the uart, for a video, as in the ARM build
+make solder        # soldering station, 24×24 Chinese, see below
+make async         # the speed gauge of the ARM build, interrupt driven, see below
+make demo-solder   # the soldering station with keys over the uart, for a video, as in the ARM build
 make term          # serial terminal on UART1, /dev/ttyUSB1, 115200 baud
 ```
 
@@ -131,10 +131,10 @@ CPU time for sending: as on the [ARM build](../tang_nano_20k_arm/README.md#solde
 - The drawing time varies by a few ms with what is on the screen; the figures are from one run.
 - The stack has the rest of the RAM; the linker keeps at least 1 KiB free (`rv.ld`). The highest stack measured: 504 bytes with clut_dma, 788 with `USE_CLUT_DMA=0`, both with the menu.
 
-## Auto gauge demo
+## Speed gauge demo
 
-The auto gauge of the [ARM build](../tang_nano_20k_arm/README.md#auto-gauge-demo), the same `async.c`: the whole screen in one clut_dma request, the CPU asleep while it is sent.
-14 frames per second: the send of a whole screen takes 67.2 ms at 12 MHz. CPU 3.5 to 6 %.
+The speed gauge of the [ARM build](../tang_nano_20k_arm/README.md#speed-gauge-demo), the same `async.c`: the whole screen in one clut_dma request, the CPU asleep while it is sent.
+14 frames per second: sending a whole screen takes 67.2 ms at 12 MHz. CPU 3.5 to 6.2 %.
 
 clut_dma is source 12 of the PLIC (`EXT_INT[0]`, GP0 of the GoRV32 SDK).
 Interrupts stay off (`mstatus.MIE` 0): `wfi` wakes on the pending interrupt, and the wait loop claims it, clears clut_dma and completes it.

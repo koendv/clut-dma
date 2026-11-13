@@ -177,8 +177,7 @@ RISC-V: GoRV32 has an AHB slave port, an AHB master port into its memory, and AP
 The registers are on the AHB slave; clut_dma reads the frame buffer, tile map and CLUT from CPU RAM through its own AHB-Lite master, as it would in an MCU.
 The limits are those of the core on this FPGA: Fmax is about 35 MHz, and the 64 KB On-Chip RAM configuration is faulty, so the build runs at 24 MHz with 32 KiB for program and data.
 
-The publication v1.0 ([clut-dma.pdf](../clut-dma.pdf)) describes an earlier model: the APB3 port inside the module, and the registers MAP, LINE_OFFSET and FIRST instead of MAP_START, LINE_STRIDE and MAP_NIBBLE, row layout only.
-The v1.1 draft ([clut-dma.md](../clut-dma.md)) describes this file.
+The publication ([clut-dma.pdf](../clut-dma.pdf), source [clut-dma.md](../clut-dma.md)) describes this file.
 
 ## Bus adapters and test harnesses
 
@@ -260,7 +259,7 @@ make size          # yosys flip-flops, gates and gate equivalents, CACHE = 1 and
 make formal        # SymbiYosys, the short tasks, about 8 minutes
 make measure       # spi underrun for spi clock and memory wait states, row and vertical layout, about 40 minutes;
                    # make measure WAIT_STATES="16 24 32" for external memory
-make pdf           # clut-dma.pdf from the draft (replaces the v1.0 PDF), README.pdf
+make pdf           # clut-dma.pdf from clut-dma.md, README.pdf
 make zip           # build/clut-dma.zip, the files of the last commit
 make binzip        # build/clut-dma-bin-<commit>.zip: the bitstreams and firmware of both builds
 ./nightly.sh &     # the long tests, results in build/nightly/latest/summary.txt

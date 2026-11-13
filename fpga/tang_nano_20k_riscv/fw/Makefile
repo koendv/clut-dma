@@ -12,7 +12,7 @@
 #                With compressed instructions all fit in the 32 KiB On-Chip
 #                RAM. The 64 KB configuration of GoRV32 is faulty: a byte
 #                store at times lands one word further (found with stars).
-#   make async   the auto gauge of the Cortex-M1 build (async.c): the whole
+#   make async   the speed gauge of the Cortex-M1 build (async.c): the whole
 #                screen in one clut_dma request, interrupt driven (PLIC)
 #   make demo-solder  solder with keys over the uart, for a video
 #                (solder_demo.sh of the Cortex-M1 build, the same keys).
@@ -97,7 +97,7 @@ solder.elf: $(FW_DEP) $(SOLDER_SRC)
 	$(CC) $(CFLAGS) $(U8G2_DEFS) -DSOLDER_TEST -o $@ $(FW_SRC) $(SOLDER_SRC) $(LDFLAGS) lib-rv/libu8g2.a -lc -lgcc
 	$(CROSS)size $@
 
-# the auto gauge: one request per screen, interrupt driven
+# the speed gauge: one request per screen, interrupt driven
 async.elf: $(FW_DEP) $(M1FW)/async.c
 	$(CC) $(CFLAGS) $(U8G2_DEFS) -DASYNC_TEST -o $@ $(FW_SRC) $(M1FW)/async.c $(LDFLAGS) lib-rv/libu8g2.a -lc -lgcc
 	$(CROSS)size $@

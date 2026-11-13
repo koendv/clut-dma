@@ -134,7 +134,7 @@ void solder_tick(unsigned steps);
 int  solder_key(char key);
 void solder_frame(void);           /* the screen shown, again */
 
-/* the auto gauge, async.c: the whole screen in one clut_dma request,
+/* the speed gauge, async.c: the whole screen in one clut_dma request,
    interrupt driven. async_frame: sleeps until the last frame is sent,
    updates the changes, starts the next send, returns while it is sent.
    async_stats: FPS and CPU %, smoothed, in tenths */

@@ -1,7 +1,7 @@
 # clut_dma on a Cortex-M1
 
 The ARM build of the prototype: [`rtl/clut_dma.v`](../../rtl/clut_dma.v) with a Gowin Cortex-M1 soft core on a Tang Nano 20K, driving a WeAct ST7789 240×280 display.
-This is the build in the video of the [main page](../../README.md).
+The speed gauge video on the [main page](../../README.md) shows this build.
 For the engine itself, see [rtl/README.md](../../rtl/README.md).
 
 ## Hardware
@@ -84,7 +84,7 @@ make clutclock     # u8g2 ClutClock, an analog clock
 make graphics      # u8g2 demo_graphics, the GraphicsTest pages
 make mui           # u8g2 demo_mui, a menu; keys over the uart
 make stars         # Adafruit GFX falling stars, 1 bpp, row layout
-make async         # an auto gauge, one request per screen, interrupt driven
+make async         # a speed gauge, one request per screen, interrupt driven
 make demo          # the examples one after the other, then a walk through the
                    # menu with keys over the uart; waits for enter, for a video
 make term          # serial terminal on UART0, /dev/ttyUSB1, 115200 baud
@@ -185,7 +185,9 @@ A soldering station in 24×24 Chinese (`fw/solder.c`): a home screen with the ti
 The layout follows [OpenT12](https://github.com/createskyblue/OpenT12); no code or images of it are used.
 The soldering iron is simulated: the heater warms the tip, the tip loses heat to the room, a controller holds the set temperature.
 
-![black and white](../../fig/solder-bw.png) ![color](../../fig/solder-color.png)
+| black and white | color |
+|---|---|
+| ![black and white](../../fig/solder-bw.png) | ![color](../../fig/solder-color.png) |
 
 The same frame in black and white and in color, from `make sim TEST=solder`: the bitmap is the same, only the CLUT and the tile map differ.
 
@@ -232,20 +234,20 @@ CPU time for sending: the time per frame the CPU spends sending the picture, eve
 | full screen | 8,408 / 8,992 bytes | 57.9 / 58.0 ms | 32.2 ms |
 
 - Color costs RAM, not time: with clut_dma, black and white and color take the same time. The CPU draws in black and white either way, and clut_dma reads the map and CLUT words beside the bitmap; the SPI stays the limit.
-- Sending a whole screen takes 32.2 ms: 29.8 ms of pixels (240×280 in RGB444 at 27 MHz), and the window commands the u8g2 driver sends before each of the 35 tile rows. The CPU waits for it.
+- Sending a whole screen takes 32.2 ms: 29.9 ms of pixels (240×280 in RGB444 at 27 MHz), and the window commands the u8g2 driver sends before each of the 35 tile rows. The CPU waits for it.
 - Fewer tile rows take less RAM and more time: u8g2 draws the whole screen once per page.
 - The drawing time varies by a few ms with what is on the screen; the figures are from one run.
 - Variables: 348 bytes (u8g2 and mui 296). The highest stack: 656 bytes with clut_dma, 744 in software, with the menu. Code and fonts: about 15 kB in ITCM.
 
-## Auto gauge demo
+## Speed gauge demo
 
-![The auto gauge at 194 km/h, landscape](../../fig/async.png)
+![The speed gauge at 194 km/h, landscape](../../fig/async.png)
 
-An auto gauge (`fw/async.c`, `make async`): the whole screen in one clut_dma request, interrupt driven; the CPU sleeps while the screen is sent.
+A speed gauge (`fw/async.c`, `make async`): the whole screen in one clut_dma request, interrupt driven; the CPU sleeps while the screen is sent.
 
 Adapted from 06-Auto-Guage of [nishad2m8/T-Display-S3-YT](https://github.com/nishad2m8/T-Display-S3-YT), an LVGL gauge on a LilyGO T-Display S3; here in 1 bpp with colors per tile, drawn with u8g2, in landscape, 280×240 (MADCTL with MV, `ASYNC_MADCTL`; only this demo).
 
-The image: fbmem read from the board, at twice the size, as clut_dma sends it (here the RISC-V build).
+The image: the frame buffer read from the board (here the RISC-V build), at twice the size, as clut_dma sends it.
 
 The CLUT does the animation.
 The band is drawn once: 11 segments, each in its own three tile columns and its own CLUT entry; a segment is lit or dim by its CLUT entry alone, without drawing.
@@ -257,12 +259,11 @@ Measured over a whole drive cycle; FPS and CPU % as on the display, smoothed ove
 
 | | Cortex-M1, 54 MHz, SPI 27 MHz | GoRV32, 24 MHz, SPI 12 MHz |
 |---|---|---|
-| send of a whole screen | 29.9 ms | 67.2 ms |
+| sending a whole screen | 29.9 ms | 67.2 ms |
 | frames per second | 30 to 32 | 14 |
-| CPU | 3.5 to 10 % | 3.5 to 6 % |
+| CPU | 3.4 to 8.6 % | 3.5 to 6.2 % |
 
 - RAM for the display: 8,989 bytes, the buffer (8,400), tile map (525) and CLUT (64).
-- The SPI is the limit. A frame is the send of the screen, and the changes, which wait for the end of the send: clut_dma reads the buffer and the CLUT while it sends. The CPU sleeps the rest.
+- The SPI is the limit. A frame is sending the screen, waiting until sending ends, then updating what changed (the segment CLUT entries, the speed, FPS and CPU %). The updates wait because clut_dma reads the buffer and the CLUT while it sends. The CPU sleeps the rest.
 - The CPU % is low because only a few digits are drawn per frame; a screen drawn anew every frame costs more.
-  Nearly all of the CPU time is drawing the speed digits; switching segments in the CLUT takes 5 µs per frame, starting the send 9 µs (Cortex-M1).
-- The original redraws its labels on every pass of its loop; LVGL limits the screen to one refresh per 30 ms. Here the send of the screen is the limit.
+  Nearly all of the CPU time is drawing the speed digits; switching segments in the CLUT takes 5 µs per frame, starting to send 9 µs (Cortex-M1).
