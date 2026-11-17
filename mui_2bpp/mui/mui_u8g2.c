@@ -2635,6 +2635,7 @@ uint8_t mui_u8g2_u8_radio_wm_pi(mui_t *ui, uint8_t msg)
     case MUIF_MSG_VALUE_INCREMENT:
     case MUIF_MSG_VALUE_DECREMENT:
       *value = ui->arg;
+      mui_UpdateWholeScreen(ui);   /* mui_2bpp: the other radio buttons of the variable change too, update the whole screen */
       break;
     case MUIF_MSG_CURSOR_LEAVE:
       break;

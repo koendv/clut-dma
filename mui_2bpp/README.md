@@ -29,11 +29,12 @@ Boxes and frames are drawn only for the bar fields of mui.
 | directory | |
 |---|---|
 | `src/` | the library: `u8g2.h`, `u8g2_2bpp.c` (roles, pages, boxes, text, controls), `u8g2_button.c` (the button functions mui calls; the bar of a field is a color), `u8x8_clut_2bpp.c` (the colors in software) |
-| `mui/` | `mui.c mui.h mui_u8g2.c mui_u8g2.h`, from u8g2 branch clut, commit 07676acf, with `MUI_U8G2_GRID` and `MUI_U8G2_2BPP` in `mui_u8g2.c`, the same as in the branch (not yet committed there) |
+| `mui/` | `mui.c mui.h mui_u8g2.c mui_u8g2.h`, from u8g2 branch clut, commit 3bca2292 (with `MUI_U8G2_HIRES` and `MUI_U8G2_GRID`), and, here only, `MUI_U8G2_2BPP` and `mui_UpdateWholeScreen()` (three calls, marked `mui_2bpp`: `mui.h`, `mui.c`, `mui_u8g2.c`). `mui_2bpp.patch`: all of these changes against upstream u8g2 (`csrc/`, commit d6c8499c) |
 | `u8x8/` | the u8x8 files the library needs, same commit, unchanged |
 | `tools/` | `cstrings.py`, `fontconv.py`, `icons.py`: the fonts; `clutline.py`: the colors of a role, for a compiler other than GCC |
 | `font/` | Noto Sans CJK SC, Material Symbols, their licenses (`README.md`) |
 | `demo/` | a menu in English and Chinese, on the PC; the generated fonts |
+| `test/` | `mui_test.c`: every field function of mui, a test of the partial updates |
 
 ## Frame buffer
 
@@ -51,13 +52,14 @@ The screen is set at compile time: `U8G2_DISPLAY_WIDTH`,
 buffer (default: all, one page is the screen). The buffer is
 `U8G2_BUF_SIZE` bytes: 14,400 for the screen, 480 per tile row.
 
-A focus change (Next, Prev) redraws and sends only the tile rows of the
-field that had the focus and of the field that has it: one span of rows,
-from `u8g2_FirstRows()`: 8 tile rows instead of 30 for the next field, the
-rows from one field to the other for fields further apart. Every other
-change, a list that scrolls, and a field whose rows are not known redraw
-and send the whole screen; new status icons only the status row
-(`U8G2_STATUS_ROWS`, 2 tile rows). With the full
+A key redraws and sends only the tile rows of the field that had the focus
+and of the field that has it: one span of rows, from `u8g2_FirstRows()`. A
+focus change to the next field is 8 tile rows instead of 30, the rows from
+one field to the other for fields further apart; a select or a new value in
+a field is 4. A new form, a radio button, a list that scrolls, and a field
+whose rows are not known redraw and send the whole screen; new status icons
+only the status row (`U8G2_STATUS_ROWS`, 2 tile rows). See
+[Partial updates](#partial-updates). With the full
 buffer the rows are drawn in place; with a page buffer, a buffer of at
 least the height of a field (4 tile rows, 1,920 bytes) draws a field in one
 pass.
@@ -177,10 +179,80 @@ with the quarters of `option`, anti-aliased by coverage, integers only
 level and the one below; a box sets its pixels to 3. There are no draw
 colors.
 
+Partial updates: `mui_UpdateWholeScreen(ui)` (`mui.h`), for a field that
+changes more than itself; see [Partial updates](#partial-updates).
+
 A field that needs a function of u8g2 the library does not have fails to
 link, with the name of the function. The library is meant to be linked with
 `-ffunction-sections` and `--gc-sections`: the fields of mui that are not
 used, and what only they call, are left out.
+
+## Updating mui
+
+`mui/mui_2bpp.patch` holds every change to mui against upstream u8g2. When
+upstream mui changes, copy its four files and apply the patch:
+
+```
+cp ~/u8g2/csrc/mui.c ~/u8g2/csrc/mui.h ~/u8g2/csrc/mui_u8g2.c ~/u8g2/csrc/mui_u8g2.h mui/
+patch -p1 -i mui/mui_2bpp.patch
+make -j4 test
+```
+
+## Partial updates
+
+mui draws a whole form. `demo/menu.c` sends less: after a key, only the
+tile rows of the field that had the focus and of the field that has it
+(`menu_event()`, `menu_draw()`). This is correct when the key changed
+nothing else on the screen. mui says when it did: `mui_UpdateWholeScreen(ui)`
+sets a flag in `mui_t`, and the next draw sends the whole screen and clears
+the flag. mui calls it
+
+- in `mui_EnterForm()` and `mui_LeaveForm()`: every change of form, by a
+  field (goto, back, exit, parent and child) or by the application
+  (`mui_GotoForm()`, `mui_RestoreForm()`);
+- in the radio button, on select: the other buttons of its variable change
+  too.
+
+A list that scrolls changes `form_scroll_top`; `menu_event()` compares it.
+All other fields of `mui_u8g2.c` change only their own value, or enter and
+leave edit mode, and draw that in their own rows.
+
+For the programmer. Call `mui_UpdateWholeScreen()` whenever something
+outside the field with the focus changes, and the form does not change:
+
+1. a field of your own, or a wrapper around a field of mui, that changes
+   what other fields show: in its callback, on any message but
+   `MUIF_MSG_DRAW`. A field of mui changes its value on select, on value
+   increment and on value decrement; in edit mode (`_mud_`), also on Next
+   and Prev;
+2. a variable shown by two fields in different tile rows (a bar and a
+   number of one value): wrap one of them and add the call;
+3. the application, after it changed a variable a field shows, for a
+   refresh, or back from a screen of its own: `menu_update_whole_screen()`
+   in `demo/menu.c`. Not needed after `mui_GotoForm()` or
+   `mui_RestoreForm()`.
+
+And without a call:
+
+4. a field that only shows a value, which changes without a key (free
+   memory, the times of the about form), is fresh only after a whole
+   screen: ask for one when it must be fresh;
+5. a list of your own scrolls through `form_scroll_top`;
+6. a field that can have the focus draws inside the tile rows of its bar,
+   in the font of the fields (`menu_dirty_field()`), on tiles of its own;
+7. no `menu_draw()` and no `menu_status()` while the application shows a
+   screen of its own: they draw on it, and reset the tile map.
+
+A field that changes other fields and does not make the call leaves them as
+they were: the screen is wrong, not slow. The switch: `MENU_FULL_UPDATES`,
+at compile time (`make FULL=1`), every update the whole screen. Use it when
+a form shows old content and the cause is not found yet, and as the
+reference for new fields: `make test` compares the frames of both builds.
+
+Leaving mui: after an exit button there is no form; mui keeps the form and
+the cursor position, and `mui_RestoreForm()` brings them back, with the
+whole screen. Before that the application sets its tile map and clut back
+to those of the menu, if it changed them.
 
 ## Forms
 
@@ -241,6 +313,9 @@ rows above the baseline: the status row, baseline at y 18.
 make pattern      # all four codes, three clut entries, through the ST7789
                   # driver to st7789.py, compared with the formula of clut_dma
 make demo         # the menu, a list of keys: build/demo/frame_NN.png
+make mui_test     # every field function of mui, the same keys on each field
+make -j4 test     # demo and mui_test, partial updates against FULL=1, frame by
+                  # frame; the full buffer and pages of 1, 7 and 8 tile rows
 make font         # the fonts, when the forms, icons or controls change
 make fig          # the figures of the READMEs, ../fig/mui2bpp-*.png, from frames of the menu
 make size         # the demo for a Cortex-M1, stubs for SPI and keys
@@ -253,7 +328,10 @@ driver sends; `build/demo-names.txt` lists the key of each frame.
 - `make pattern`: 0 of 67,200 pixels differ, with the screen in one page and
   with pages of 1, 7 and 8 tile rows.
 - `make demo`: the frames are the same with pages of 1, 7 and 8 tile rows as
-  without.
+  without, but for the about form, which shows the size of the buffer.
+- `make test`: the frames of partial updates are the same as those of
+  `FULL=1`: 40 frames of the demo and 1,442 of mui_test, with the full
+  buffer and with pages of 1, 7 and 8 tile rows.
 
 `make size`, Cortex-M1, `-Os`: 24,082 bytes of code and constants (ITCM).
 RAM: the buffer, the tile map and the clut (14,978 bytes, in fbmem on the
@@ -303,8 +381,8 @@ button and Back. The back row has the colors of the content.
 The about form shows numbers, each only when it is known (not 0): the
 cpu and its clock, the memory for the display (computed, KB of 1024
 bytes), the code (from the linker, set by the board) and, measured on a
-board built with `STATS=1`, the last focus change and the last whole
-screen; `menu_about_line()` in `demo/menu.c`, the globals in `menu.h`,
+board built with `STATS=1`, the last partial update (a focus change, a
+select in a field) and the last whole screen; `menu_about_line()` in `demo/menu.c`, the globals in `menu.h`,
 integers only. `make FULL=1 demo`: every key the whole screen, the
 reference for the frames of a partial update.
 `demo/main_host.c` is the PC side: a list of keys and of new status icons,

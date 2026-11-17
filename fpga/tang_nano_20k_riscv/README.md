@@ -152,6 +152,7 @@ RAM for the display: the buffer, the tile map and the CLUT.
 
 - Sending a whole screen: 86,400 bytes of pixels, 57.6 ms at 12 MHz. With clut_dma the rest is drawing, 8 pages. A focus change draws and sends only the tile rows of the two fields: the next field is 8 tile rows, two pages.
 - A focus change to the next field: 8 tile rows, 24.9 ms (`make -B mui2bpp STATS=1`, key `f`, as in the ARM build).
+- A select in a field, as a checkbox, or entering and leaving edit mode: only the tile rows of the field, 4 tile rows, 15.4 ms for a checkbox, 20.1 ms for the baud rate (`STATS=1`).
 - The program: code, data and variables; the stack has the rest of the 32 KiB, at least 1 KiB (`rv.ld`).
 - RAM and stack of the menu, measured on both boards: [mui_2bpp](../../mui_2bpp/README.md#ram).
 

@@ -739,6 +739,7 @@ void mui_EnterForm(mui_t *ui, fds_t *fds, uint8_t initial_cursor_position)
 {
   /* exit any previous form, will not do anything if there is no current form */
   mui_LeaveForm(ui);
+  mui_UpdateWholeScreen(ui);   /* mui_2bpp: a new form, update the whole screen */
   
   /* clean focus fields */
   ui->touch_focus_fds = NULL;
@@ -783,6 +784,7 @@ void mui_LeaveForm(mui_t *ui)
   if ( mui_IsFormActive(ui) == 0 )
     return;
   
+  mui_UpdateWholeScreen(ui);   /* mui_2bpp: no form, update the whole screen */
   mui_send_cursor_msg(ui, MUIF_MSG_CURSOR_LEAVE);
   ui->cursor_focus_fds = NULL;
   

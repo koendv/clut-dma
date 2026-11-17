@@ -20,10 +20,14 @@
   Checkboxes, radio buttons and the mark of a list are glyphs of the
   control font.
 
-  Updates: a focus change (Next, Prev) redraws and sends only the tile rows
-  of the field that had the focus and of the field that has it: one span,
-  low .. high. New status icons: only the status row. Every other change,
-  and a list that scrolls, redraws and sends the whole screen.
+  Updates: a key redraws and sends only the tile rows of the field that had
+  the focus and of the field that has it: one span, low .. high. A focus
+  change is two fields; a select or a new value in a field is one. New
+  status icons: only the status row. The whole screen when mui says that
+  more changed (mui_UpdateWholeScreen() in mui.h: a new form, a radio button, a
+  field of the application that changes other fields), when a list scrolls,
+  and after menu_update_whole_screen(). MENU_FULL_UPDATES: every update the whole
+  screen, the reference.
 */
 
 #include "menu.h"
@@ -37,7 +41,8 @@ static uint8_t language, shown_language;      /* 0 English, 1 Chinese */
 static uint8_t backlight = 1, sleep_enable, brightness = 8, speed = 1, stop_bits;
 static menu_status_t status = { 5, 3, 3, 1, 0 };
 
-/* the tile rows menu_draw() updates; empty (low > high): the whole screen */
+/* the tile rows menu_draw() updates, when mui does not ask for the whole
+   screen (mui.update_whole_screen); empty (low > high): the whole screen */
 static uint8_t dirty_low = U8G2_TILE_ROWS - 1, dirty_high = 0;
 
 #if U8G2_STATUS_ROWS < 1
@@ -52,11 +57,11 @@ static void menu_dirty_rows(uint8_t r0, uint8_t r1)
     dirty_high = r1;
 }
 
-/* the whole screen, marked: new status icons before the next draw cannot
-   make it a partial update */
-static void menu_dirty_full(void)
+/* the whole screen: the flag of mui, cleared by menu_draw(). Tile rows
+   marked before or after do not make it a partial update */
+void menu_update_whole_screen(void)
 {
-  menu_dirty_rows(0, U8G2_TILE_ROWS - 1);
+  mui_UpdateWholeScreen(&mui);
 }
 
 /* after a draw: nothing marked */
@@ -115,7 +120,7 @@ static char *menu_ms(char *p, uint32_t us)
 
 /* MUI_XYA("AB", x, y, arg) or MUI_XYAT("AB", x, y, arg, label): a line of
    the about form, the label and a number. arg: 0 the cpu and its clock,
-   1 the memory for the display, 2 the code, 3 the last focus change, 4 the
+   1 the memory for the display, 2 the code, 3 the last partial update, 4 the
    last whole screen. Nothing when the number is not known (0) */
 static uint8_t menu_about_line(mui_t *ui, uint8_t msg)
 {
@@ -247,7 +252,7 @@ void menu_status(u8g2_t *u8g2, const menu_status_t *s)
 {
   status = *s;
 #ifdef MENU_FULL_UPDATES
-  menu_dirty_full();
+  menu_update_whole_screen();
 #else
   menu_dirty_rows(0, U8G2_STATUS_ROWS - 1);   /* the status row, not a field */
 #endif
@@ -295,30 +300,24 @@ void menu_event(uint8_t event)
   else
     mui_SendSelect(&mui);
 
-  /* a focus change: the rows of the field before and after. In edit mode
-     the focus stays, and the value changes inside its field. A list that
-     scrolls itself changes other lines: the whole screen */
+  /* the rows of the field that had the focus and of the field that has it:
+     a field changes only itself, or mui has asked for the whole screen
+     (mui_UpdateWholeScreen()). A list that scrolls changes its other lines: the
+     whole screen */
+  if ( mui.form_scroll_top != scroll_top || !menu_dirty_field(focus) ||
+      !menu_dirty_field(mui.cursor_focus_fds) )
+    menu_update_whole_screen();
 #ifdef MENU_FULL_UPDATES
-  /* the reference: every key the whole screen */
-  if ( 0 )
-#else
-  if ( event != MENU_SELECT )
+  menu_update_whole_screen();            /* the reference: every key the whole screen */
 #endif
-  {
-    if ( mui.form_scroll_top != scroll_top || !menu_dirty_field(focus) ||
-        !menu_dirty_field(mui.cursor_focus_fds) )
-      menu_dirty_full();
-  }
-  else
-    menu_dirty_full();
 
   /* a new language, when the option is no longer being edited: as after a
-     reboot, the menu starts again, in the other language */
+     reboot, the menu starts again, in the other language; a new form, the
+     whole screen */
   if ( !mui.is_mud && language != shown_language )
   {
     menu_fds();
     mui_GotoForm(&mui, 1, 0);
-    menu_dirty_full();
   }
 }
 
@@ -326,7 +325,7 @@ void menu_event(uint8_t event)
 
 void menu_draw(u8g2_t *u8g2)
 {
-  if ( dirty_low <= dirty_high )
+  if ( !mui.update_whole_screen && dirty_low <= dirty_high )
     u8g2_FirstRows(u8g2, dirty_low, dirty_high);
   else
     u8g2_FirstPage(u8g2);
@@ -335,5 +334,6 @@ void menu_draw(u8g2_t *u8g2)
     menu_draw_status(u8g2);
     mui_Draw(&mui);
   } while ( u8g2_NextPage(u8g2) );
-  menu_dirty_clear();           /* a one-shot request */
+  mui.update_whole_screen = 0;        /* one-shot requests */
+  menu_dirty_clear();
 }

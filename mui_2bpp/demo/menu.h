@@ -30,20 +30,27 @@ extern const char *menu_cpu_name;
 extern uint32_t menu_cpu_mhz;
 extern uint32_t menu_display_bytes;
 extern uint32_t menu_code_bytes;
-extern uint32_t menu_response_us;       /* the last focus change */
+extern uint32_t menu_response_us;       /* the last partial update: a focus change, a select */
 extern uint32_t menu_screen_us;         /* the last whole screen */
 
 /* after the display setup; map and clut: memory the colors are read from
    (U8G2_MAP_SIZE bytes, 16 entries 128-byte aligned; fbmem for clut_dma) */
 void menu_init(u8g2_t *u8g2, uint8_t *map, uint32_t (*clut)[2]);
 
-/* a key: MENU_NEXT, MENU_PREV, MENU_SELECT; then menu_draw(). A focus
-   change marks the tile rows of the two fields for menu_draw() */
+/* a key: MENU_NEXT, MENU_PREV, MENU_SELECT; then menu_draw(). It marks the
+   tile rows of the field that had the focus and of the field that has it
+   for menu_draw() */
 void menu_event(uint8_t event);
 
-/* draw and send the tile rows marked by menu_event(), else the whole
-   screen, all pages */
+/* draw and send the tile rows marked by menu_event(); the whole screen, all
+   pages, when mui asks for it (mui_UpdateWholeScreen(): a new form, a radio
+   button) or after menu_update_whole_screen() */
 void menu_draw(u8g2_t *u8g2);
+
+/* the next menu_draw() sends the whole screen: after the application
+   changed what a field shows, for a refresh, or back from a screen of its
+   own. A field calls mui_UpdateWholeScreen(ui) instead */
+void menu_update_whole_screen(void);
 
 /* new icons; the status row drawn and sent */
 void menu_status(u8g2_t *u8g2, const menu_status_t *status);

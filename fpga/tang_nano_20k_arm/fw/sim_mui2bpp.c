@@ -97,6 +97,9 @@ static const struct {
   { MENU_NEXT,   "next: values" },
   { MENU_SELECT, "select: the values form" },
   { MENU_NEXT,   "next: baud rate" },
+  { MENU_SELECT, "select: edit the baud rate" },
+  { MENU_NEXT,   "next: 38400" },
+  { MENU_SELECT, "select: baud rate done" },
   { MENU_NEXT,   "next: 1 stop bit" },
   { MENU_NEXT,   "next: 2 stop bits" },
 };

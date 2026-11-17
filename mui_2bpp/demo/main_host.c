@@ -6,14 +6,13 @@
   status icons; after each the display is updated, a frame of st7789.py.
 
   usage: demo spi.txt names.txt
-  names.txt: per frame the key, and how many tile rows were sent: 30, the
-  screen, for every update.
+  names.txt: per frame the key, and how many tile rows were sent: 30 is the
+  whole screen.
 */
 
 #include <stdio.h>
 #include "host.h"
 #include "menu.h"
-
 static uint8_t buf[U8G2_BUF_SIZE] __attribute__((aligned(4)));
 static uint8_t map[U8G2_MAP_SIZE];
 static uint32_t clut[16][2] __attribute__((aligned(128)));
@@ -43,6 +42,7 @@ static const struct
   { MENU_SELECT, "select: edit the brightness" },
   { MENU_NEXT,   "next: brightness 9" },
   { MENU_NEXT,   "next: brightness 10" },
+  { MENU_PREV,   "prev: brightness 9" },
   { MENU_SELECT, "select: brightness done" },
   { MENU_NEXT,   "next: baud rate" },
   { MENU_SELECT, "select: edit the baud rate" },
@@ -52,6 +52,9 @@ static const struct
   { MENU_NEXT,   "next: 1 stop bit" },
   { MENU_NEXT,   "next: 2 stop bits" },
   { MENU_SELECT, "select: 2 stop bits" },
+  { MENU_PREV,   "prev: 1 stop bit" },
+  { MENU_SELECT, "select: 1 stop bit" },
+  { MENU_NEXT,   "next: 2 stop bits" },
   { MENU_NEXT,   "next: back" },
   { STATUS,      "status: charging" },
   { MENU_SELECT, "select: main menu, the cursor on values" },

@@ -1,4 +1,3 @@
 build/
-build-p*/
-build-full/
+build-*/
 __pycache__/

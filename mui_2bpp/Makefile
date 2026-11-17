@@ -17,11 +17,18 @@
 #   make PAGE_ROWS=n  the same with a page buffer of n tile rows (build-pn)
 #   make FULL=1 demo  every key the whole screen: the reference for the frames
 #                     of a partial update (build-full)
+#   make mui_test     test/mui_test.c: every field function of mui, the same
+#                     keys on each field: build/mui_test/frame_NNN.png
+#   make test         demo and mui_test with partial updates and with FULL=1:
+#                     the frames must be the same; with the full buffer and
+#                     with pages of 1, 7 and 8 tile rows. make -j4 test
 #   make clean        (the generated font in demo/ stays)
 #
 # Files: src/ the library; u8x8/ copied from u8g2 branch clut, commit
-# 07676acf, unchanged; mui/ from the same branch, with MUI_U8G2_GRID and
-# MUI_U8G2_2BPP (in ~/src/u8g2 too); tools/ the font tools; demo/ the PC side.
+# 07676acf, unchanged; mui/ from the same branch, commit 3bca2292, with
+# MUI_U8G2_2BPP and mui_UpdateWholeScreen() (here only),
+# all in mui/mui_2bpp.patch, against upstream u8g2 csrc/ (README.md);
+# tools/ the font tools; demo/ the PC side; test/ mui_test.
 
 CC     ?= cc
 PYTHON ?= python3
@@ -59,7 +66,7 @@ CONTROLS := check_box_outline_blank check_box radio_button_unchecked radio_butto
 all: pattern demo
 
 # our files with warnings, the copies as they are
-$(B)/src/%.o $(B)/demo/%.o: WARN := -Wall -Wextra
+$(B)/src/%.o $(B)/demo/%.o $(B)/test/%.o: WARN := -Wall -Wextra
 $(B)/%.o: %.c $(HDR)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(WARN) -c -o $@ $<
@@ -124,6 +131,32 @@ demo: $(B)/bin/demo
 	$(B)/bin/demo $(B)/demo.txt $(B)/demo-names.txt
 	$(PYTHON) $(ST7789) $(B)/demo.txt $(B)/demo $(B)/demo-names.txt
 
+# every field function of mui, the same keys on each field
+MUITEST := test/mui_test.c demo/host.c demo/font_noto_sc_24.c demo/font_controls_28.c
+$(B)/test/mui_test.o: demo/font_noto_sc_24.h demo/font_controls_28.h
+
+$(B)/bin/mui_test: $(patsubst %.c,$(B)/%.o,$(MUITEST)) $(LIB)
+	@mkdir -p $(dir $@)
+	$(CC) $(LDFLAGS) -o $@ $^
+
+mui_test: $(B)/bin/mui_test
+	$(B)/bin/mui_test $(B)/mui_test.txt $(B)/mui_test-names.txt
+	$(PYTHON) $(ST7789) $(B)/mui_test.txt $(B)/mui_test $(B)/mui_test-names.txt
+
+# partial updates against the whole screen (FULL=1), frame by frame, with the
+# full buffer (test-0) and with pages of 1, 7 and 8 tile rows
+test: test-0 test-1 test-7 test-8
+
+test-%:
+	$(MAKE) -s PAGE_ROWS=$(filter-out 0,$*) demo mui_test > /dev/null
+	$(MAKE) -s FULL=1 PAGE_ROWS=$(filter-out 0,$*) demo mui_test > /dev/null
+	@b=build$(if $(filter-out 0,$*),-p$*); for t in demo mui_test; do n=0; \
+	  for f in $$b-full/$$t/frame_*.png; do \
+	    cmp $$f $$b/$$t/$${f##*/} || exit 1; n=$$((n+1)); \
+	  done; \
+	  echo "$$b/$$t: $$n frames, the same as $$b-full/$$t"; \
+	done
+
 # the figures of the READMEs, generated: frames of the menu (demo/main_fig.c)
 FIG := $(patsubst %.c,$(B)/%.o,demo/main_fig.c demo/menu.c demo/host.c $(FONTS) $(FORMS)) $(LIB)
 $(B)/demo/main_fig.o: demo/font_noto_sc_24.h
@@ -155,6 +188,6 @@ size: $(B)/bin/size.elf
 	$(ARMSIZE) $<
 
 clean:
-	rm -rf build build-p* build-full
+	rm -rf build build-*
 
-.PHONY: all pattern font demo fig size clean
+.PHONY: all pattern font demo mui_test test fig size clean

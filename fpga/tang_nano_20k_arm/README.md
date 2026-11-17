@@ -310,9 +310,9 @@ Build options of `make mui2bpp`; change an option with `make -B`:
 |---|---|
 | `PAGE_ROWS=n` | the buffer: n tile rows; default 30, the whole screen |
 | `USE_CLUT_DMA=0` | no clut_dma: the CPU expands the colors and writes the bytes to the SPI; default 1, clut_dma (`fw/u8x8_clut_dma_2bpp.c`) |
-| `STATS=1` | after each key the tile rows sent and the time on the uart; key `f`: 20 focus changes; the about form shows the last focus change and the last whole screen |
+| `STATS=1` | after each key the tile rows sent and the time on the uart; key `f`: 20 focus changes; the about form shows the last partial update (a focus change, a select in a field) and the last whole screen |
 
-`make sim-mui2bpp` sends 7 screens through the RTL both ways, in about 2.5 minutes: 355,606 bytes to the display, the same with clut_dma (123 requests) as with the CPU. A focus change sends only the tile rows of the two fields: 8 or 4 tile rows instead of 30.
+`make sim-mui2bpp` sends 10 screens through the RTL both ways, in about 2.5 minutes: 390,298 bytes to the display, the same with clut_dma (135 requests) as with the CPU. A focus change sends only the tile rows of the two fields: 8 or 4 tile rows instead of 30.
 
 Measured with key `b`: Cortex-M1 at 54 MHz, SPI at 27 MHz, 240×240 in RGB444, a whole screen drawn and sent.
 
@@ -323,6 +323,7 @@ Measured with key `b`: Cortex-M1 at 54 MHz, SPI at 27 MHz, 240×240 in RGB444, a
 
 - Sending a whole screen: 86,400 bytes of pixels, 25.6 ms at 27 MHz, and the window commands of the 30 tile rows. The rest is drawing: mui draws the form anew. A focus change draws and sends only the tile rows of the field that had the focus and of the field that has it.
 - A focus change to the next field: 8 tile rows, 13.1 ms (`make -B mui2bpp STATS=1`, key `f`: 20 focus changes from the first field of a form; with STATS=1 each key prints its tile rows and time).
+- A select in a field, as a checkbox, or entering and leaving edit mode: only the tile rows of the field, 4 tile rows, 8.7 ms for a checkbox, 10.9 ms for the baud rate (`STATS=1`).
 - In software the CPU expands every pixel: 2.6 times as long.
 - The fonts: the text 130 glyphs, 35 of them Chinese, 10,410 bytes; the status icons 928 bytes; the controls 536 bytes.
 - RAM and stack of the menu, measured on both boards: [mui_2bpp](../../mui_2bpp/README.md#ram).

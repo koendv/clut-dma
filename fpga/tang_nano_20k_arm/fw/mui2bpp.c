@@ -18,8 +18,8 @@
   make mui2bpp STATS=1 (MUI2_STATS): after each key the tile rows sent and
   the time of the update, e.g. "s: 8 tile rows, 10512 us"; key f: a
   benchmark, 20 focus changes, Next and Prev in turn (from the first field
-  of a form: no wrap). The about form shows the last focus change and the
-  last whole screen, measured.
+  of a form: no wrap). The about form shows the last partial update (a
+  focus change, a select in a field) and the last whole screen, measured.
 
   The about form: the cpu and its clock, the memory for the display, and
   the code: text and data, from the symbols of the linker script.
@@ -282,7 +282,8 @@ static void benchmark(u8g2_t *u8g2)
 
 #ifdef MUI2_STATS
 /* the time of an update for the about form: fewer tile rows than the
-   screen, a focus change; else a whole screen */
+   screen, a partial update (a focus change, a select in a field); else a
+   whole screen */
 static void record(uint32_t cycles)
 {
   uint32_t us = cycles / (HCLK_HZ / 1000000u);
@@ -427,7 +428,7 @@ int main(void)
       ramwr = 0;
       t0 = now();
       menu_status(&u8g2, &status_cycle[s]);
-      stats("i", now() - t0);     /* not a focus change: not on the about form */
+      stats("i", now() - t0);     /* the status row: not on the about form */
 #else
       menu_status(&u8g2, &status_cycle[s]);
 #endif

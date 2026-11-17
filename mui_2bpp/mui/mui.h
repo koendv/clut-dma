@@ -251,6 +251,8 @@ struct mui_struct
   
   /* 0: mse, 1: mud */
   uint8_t is_mud;         // a temp variable for the MUIF function to store remember up down mode. This variable will be cleared before sending MUIF_MSG_CURSOR_ENTER
+  /* mui_2bpp: more changed than the field with the focus; the application sends the whole screen and clears it */
+  uint8_t update_whole_screen;
   /* current field/style variables */
   //uint8_t cursor_focus_position;        // the index of the field which has focus, can be used as last argument for mui_EnterForm
   
@@ -605,6 +607,11 @@ void mui_SendValueDecrement(mui_t *ui);
 
 
 #define mui_IsFormActive(ui) ((ui)->current_form_fds != NULL) 
+
+/* mui_2bpp: the next draw sends the whole screen, not only the rows of the
+   field with the focus. Set by mui_EnterForm(), mui_LeaveForm() and the radio
+   button; a field that changes what other fields show calls it too */
+#define mui_UpdateWholeScreen(ui) ((ui)->update_whole_screen = 1)
 
 #ifdef __cplusplus
 }
