@@ -75,10 +75,15 @@ clut_dma has three modes:
 |---|---|
 | ![The values form of the anti-aliased menu, English](fig/mui2bpp-values.png) | ![The values form of the anti-aliased menu, Chinese](fig/mui2bpp-values-zh.png) |
 
-1 bpp minimizes memory, but characters may look blocky or jagged.
-For systems that have the memory, 2 bpp allows anti-aliasing, for smooth, more natural-looking characters.
-
 RAM for the display, 240×280, from 0.8 KB (1 bpp, one tile row) to 17.0 KB (2 bpp, full screen): [the table](mui_2bpp/README.md#frame-buffer).
+
+## Anti-aliasing
+
+1 bpp minimizes memory, but characters may look blocky or jagged.
+For systems that have the memory, 2 bpp is still small, but allows anti-aliasing, for smooth, more natural-looking characters.
+
+![anti-aliasing comparison](fig/menu-1bpp-2bpp.gif)
+Comparison between 1 bit per pixel text and 2 bit per pixel anti-aliased text.
 
 ## Prototype
 
